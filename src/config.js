@@ -31,7 +31,7 @@ export async function loadConfig() {
   } catch {
     /* 无本地服务：退回浏览器直连 */
   }
-  if (!appConfig.hasAmapKey) {
+  if (!appConfig.proxy && !appConfig.hasAmapKey) {
     try {
       const res = await fetch('config.json', { cache: 'no-store' });
       if (res.ok) {
