@@ -1,0 +1,6 @@
+{
+  "amapKey": "",
+  "tileProvider": "amap",
+  "routeProvider": "auto",
+  "port": 8080
+}

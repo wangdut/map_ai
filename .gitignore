@@ -1,0 +1,9 @@
+node_modules/
+config.json
+.amap-probe.json
+*.log
+.DS_Store
+.thumbs.db
+
+.shots/
+data/.pcas-code.json
