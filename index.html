@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>区域高亮地图 · map_ai</title>
+    <link rel="stylesheet" href="vendor/leaflet.css" />
+    <link rel="stylesheet" href="styles/app.css" />
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <header class="topbar">
+      <div class="brand">区域高亮地图</div>
+
+      <div class="search" id="search">
+        <input
+          id="q"
+          type="search"
+          placeholder="搜索地址 / 行政区 / 兴趣点，如：天河区、华南农业大学"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button id="goBtn" class="btn-primary">搜索</button>
+        <div id="results" class="dropdown hidden"></div>
+      </div>
+
+      <nav class="tools" id="tools">
+        <button class="tool" data-tool="draw" title="沿地图描点绘制任意区域，自动计算面积与周长">绘制区域</button>
+        <button class="tool" data-tool="measure" title="逐点点击测算直线距离">测距</button>
+        <button class="tool" data-tool="route" title="两点路径规划">路径</button>
+        <button class="tool" id="fitAll" title="缩放至全部高亮区域">全部区域</button>
+        <button class="tool danger" id="clearAll" title="清除全部高亮">清除</button>
+      </nav>
+    </header>
+
+    <div class="layer-switch" id="layerSwitch">
+      <button data-basemap="standard" class="active">标准</button>
+      <button data-basemap="satellite">卫星</button>
+      <label class="anno"><input type="checkbox" id="annoChk" checked />路网注记</label>
+    </div>
+
+    <section class="panel" id="panel">
+      <div class="panel-head">
+        <b>高亮区域 <span id="hlCount" class="count">0</span></b>
+        <button id="panelToggle" class="ghost" title="折叠/展开">–</button>
+      </div>
+      <div class="panel-body" id="panelBody">
+        <ul id="hlList" class="hl-list"></ul>
+        <div id="matrix" class="matrix hidden"></div>
+        <p class="hint">
+          搜索后回车即可高亮；在高亮区域内<b>右键</b>可取消高亮。半透明填充不遮挡底图细节，区域内仍可正常左键选点。
+        </p>
+      </div>
+    </section>
+
+    <section class="route-card hidden" id="routeCard">
+      <div class="rc-head"><b>路径规划</b><button id="rcClose" class="ghost" title="关闭">✕</button></div>
+      <div class="rc-row"><span class="dot from">起</span><input id="rcFrom" placeholder="起点地址，或在地图上右键取点" /></div>
+      <div class="rc-row"><span class="dot to">终</span><input id="rcTo" placeholder="终点地址" /></div>
+      <div class="rc-modes" id="rcModes">
+        <button data-mode="driving" class="active">驾车</button>
+        <button data-mode="walking">步行</button>
+        <button data-mode="bicycling">骑行</button>
+        <button data-mode="transit">公交</button>
+      </div>
+      <div class="rc-actions">
+        <button id="rcSwap" class="ghost">交换起终点</button>
+        <button id="rcGo" class="btn-primary">规划路线</button>
+      </div>
+      <div id="rcResult" class="rc-result">输入起终点后规划，支持高德（需 key）与 OSRM 兜底。</div>
+    </section>
+
+    <footer class="statusbar">
+      <span id="coords">经纬度 --</span>
+      <span id="zoom">缩放 --</span>
+      <span id="tip"></span>
+      <span id="srcFlag"></span>
+    </footer>
+
+    <div id="ctxMenu" class="ctx hidden"></div>
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="vendor/leaflet.js"></script>
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
