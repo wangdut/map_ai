@@ -8,6 +8,7 @@ import { createContextMenu } from './ui/contextmenu.js';
 import { createDrawTool } from './ui/draw.js';
 import { createMeasureTool } from './ui/measure.js';
 import { createRouteTool } from './ui/route.js';
+import { createSettings } from './ui/settings.js';
 import { probeOsm } from './data/osm.js';
 import { amapReady, regeo } from './data/amap.js';
 import { findAdmin, searchAdmin, loadAdminIndex, LEVEL_LABEL } from './data/admin-index.js';
@@ -70,6 +71,8 @@ const ctx = createContextMenu(map);
 const route = createRouteTool(map, ui, state);
 const draw = createDrawTool(map, ui, { onCreated: (item) => renderer.fitItem(item.id) });
 const measure = createMeasureTool(map, ui);
+
+const settings = createSettings({ ui, onChange: updateSourceFlag });
 
 createPanel({
   onExpandChange: (v) => {
@@ -190,6 +193,7 @@ map.on('contextmenu', (e) => {
 document.addEventListener('keydown', (e) => {
   const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName);
   if (e.key === 'Escape') {
+    if (settings.isOpen) return settings.close();
     if (state.activeTool) setTool(state.activeTool);
     return;
   }

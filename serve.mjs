@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, writeFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,14 +28,19 @@ const PROXIES = [
 ];
 
 const HIDDEN = new Set(['/config.json', '/serve.mjs', '/.git']);
+const CONFIG_FILE = join(ROOT, 'config.json');
+const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8' };
 
 async function loadConfig() {
   try {
-    return JSON.parse(await readFile(join(ROOT, 'config.json'), 'utf8'));
+    return JSON.parse(await readFile(CONFIG_FILE, 'utf8'));
   } catch {
     return {};
   }
 }
+
+/** 对外只给掩码，明文 key 永远不离开服务端 */
+const maskKey = (k) => (!k ? '' : k.length > 9 ? `${k.slice(0, 4)}…${k.slice(-4)}` : '•'.repeat(k.length));
 
 function send(res, status, body, headers = {}) {
   res.writeHead(status, { 'Cache-Control': 'no-store', ...headers });
@@ -82,6 +87,50 @@ async function handleProxy(req, res, url) {
   }
 }
 
+const LOCAL_HOSTS = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+/** 高德 web 服务 key 是 16–64 位字母数字（个别带 - _），挡掉误粘贴整段网页的情况 */
+const KEY_SHAPE = /^[A-Za-z0-9_-]{16,64}$/;
+
+async function handleSettings(req, res, cfg) {
+  if (req.method !== 'POST') return send(res, 405, '{"error":"method_not_allowed"}', JSON_HEADERS);
+
+  const ip = req.socket.remoteAddress || '';
+  const fromLoopback = ip === '127.0.0.1' || ip === '::1' || ip.endsWith('127.0.0.1');
+  const requested = req.headers['x-requested-with'] === 'map_ai';
+  const origin = req.headers.origin;
+  if (!fromLoopback || !requested || (origin && !LOCAL_HOSTS.test(origin))) {
+    return send(res, 403, JSON.stringify({ error: 'forbidden', message: '只能由本机的页面修改 key' }), JSON_HEADERS);
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse((await readBody(req))?.toString('utf8') || '{}');
+  } catch {
+    return send(res, 400, '{"error":"bad_json"}', JSON_HEADERS);
+  }
+  if (typeof payload.amapKey !== 'string') {
+    return send(res, 400, JSON.stringify({ error: 'missing_field', message: '需要 amapKey 字段' }), JSON_HEADERS);
+  }
+
+  const key = payload.amapKey.trim();
+  if (key && !KEY_SHAPE.test(key)) {
+    return send(
+      res,
+      400,
+      JSON.stringify({ error: 'bad_key', message: '格式不像高德 Web 服务 key（应为 16–64 位字母或数字）' }),
+      JSON_HEADERS,
+    );
+  }
+
+  // 以磁盘内容为准再合并，避免覆盖服务启动后用户手改的其它字段
+  const fresh = await loadConfig();
+  fresh.amapKey = key;
+  await writeFile(CONFIG_FILE, JSON.stringify(fresh, null, 2) + '\n', 'utf8');
+  Object.assign(cfg, fresh);
+  console.log(`config.json 已更新：高德 key ${key ? `已保存（${maskKey(key)}）` : '已删除'}`);
+  send(res, 200, JSON.stringify({ ok: true, hasAmapKey: Boolean(key), amapKeyMask: maskKey(key) }), JSON_HEADERS);
+}
+
 async function handleStatic(res, pathname) {
   if (HIDDEN.has(pathname)) return send(res, 404, 'not found', { 'Content-Type': 'text/plain' });
   let filePath = normalize(join(ROOT, decodeURIComponent(pathname)));
@@ -111,19 +160,21 @@ createServer(async (req, res) => {
         200,
         JSON.stringify({
           hasAmapKey: Boolean(cfg.amapKey),
+          amapKeyMask: maskKey(cfg.amapKey),
           tileProvider: cfg.tileProvider || 'amap',
           routeProvider: cfg.routeProvider || 'auto',
           proxy: true,
         }),
-        { 'Content-Type': 'application/json; charset=utf-8' },
+        JSON_HEADERS,
       );
     }
+    if (url.pathname === '/api/settings') return await handleSettings(req, res, cfg);
     if (url.pathname.startsWith('/api/')) return await handleProxy(req, res, url);
     return await handleStatic(res, url.pathname === '/' ? '/index.html' : url.pathname);
   } catch (err) {
     send(res, 500, 'server error', { 'Content-Type': 'text/plain' });
     console.error(err);
   }
-}).listen(port, () => {
-  console.log(`map_ai 已启动: http://localhost:${port}  (高德 key: ${cfg.amapKey ? '已配置' : '未配置，使用免 key 模式'})`);
+}).listen(port, '127.0.0.1', () => {
+  console.log(`map_ai 已启动: http://localhost:${port}  (仅本机可访问；高德 key: ${cfg.amapKey ? '已配置' : '未配置，使用免 key 模式'})`);
 });

@@ -1,5 +1,6 @@
 const DEFAULTS = {
   hasAmapKey: false,
+  amapKeyMask: '',
   tileProvider: 'amap',
   routeProvider: 'auto',
   proxy: false,
@@ -48,4 +49,24 @@ export async function loadConfig() {
     }
   }
   return appConfig;
+}
+
+/**
+ * 把 key 交给本地服务写进 config.json。明文只经过这一次请求，
+ * 前端状态里只保留掩码与布尔值，避免出现在 DOM、日志或提交里。
+ */
+export async function saveAmapKey(key) {
+  const res = await fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'map_ai' },
+    body: JSON.stringify({ amapKey: key }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `保存失败（HTTP ${res.status}）`);
+  Object.assign(appConfig, {
+    hasAmapKey: Boolean(data.hasAmapKey),
+    amapKeyMask: data.amapKeyMask || '',
+    amapKey: '',
+  });
+  return data;
 }

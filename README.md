@@ -15,7 +15,7 @@ node serve.mjs          # 或双击 启动.bat（会顺便打开浏览器）
 
 浏览器打开 <http://localhost:8080>。**不启动服务也能用**：直接双击 `index.html` 即可，只是此时无法配置高德 key、且部分跨源请求会被浏览器拦掉，所以推荐走 `serve.mjs`。
 
-`serve.mjs` 做两件事：静态文件服务 + `/api/*` 反向代理（amap / datav / osrm / photon / esri / nominatim / overpass）。高德的 key 由服务端注入，**不会出现在前端代码与 git 里**。
+`serve.mjs` 做三件事：静态文件服务 + `/api/*` 反向代理（amap / datav / osrm / photon / esri / nominatim / overpass）+ `/api/settings` 保存高德 key。服务只监听 `127.0.0.1`，局域网其它机器访问不到；高德的 key 由服务端注入，**不会出现在前端代码与 git 里**。
 
 ## 要不要注册高德 key
 
@@ -32,10 +32,17 @@ node serve.mjs          # 或双击 启动.bat（会顺便打开浏览器）
 
 1. 打开 <https://lbs.amap.com> → 注册 → 实名认证（个人开发者免费配额足够）。
 2. 控制台 → 创建应用 → 添加 key → 服务平台选 **Web服务**（不是 Web端 JS API）。
-3. 复制 `config.example.json` 为 `config.json`，把 key 填进 `amapKey`，重启 `serve.mjs`。
+3. 回到本页，点顶栏 **设置** → 粘贴 key → **保存**，状态栏立刻变成「高德 key 已启用」，无需重启。
+   - 勾选 **显示** 可核对粘贴内容；点 **删除 key** 即清空并回到免 key 模式。
+   - 不想用页面时也可以手动：复制 `config.example.json` 为 `config.json` 填 `amapKey` 后重启 `serve.mjs`。
 4. 想看接口到底给了哪些字段（尤其有没有轮廓）：`node scripts/probe-amap.mjs 华南农业大学 广州`，完整响应会写到 `.amap-probe.json`。
 
-`config.json` 已在 `.gitignore` 里，不会误提交。
+### key 的隐私边界
+
+- 明文只存在于「你粘贴 → 这一次本机 POST」的瞬间；服务端写进同目录 `config.json`（已在 `.gitignore` 里，`git log -S` 全历史无明文），转发高德请求时才注入。
+- 前端只拿到掩码（`xxxx…yyyy` 形式），页面 DOM、控制台、截图、git 历史都不会出现完整 key。
+- 写接口 `POST /api/settings` 有三重门禁：仅接受回环地址、必须带自定义头 `X-Requested-With: map_ai`（跨站简单表单带不上且不放行预检）、Origin 必须同端口；`serve.mjs` 本身只 `listen` 在 `127.0.0.1`，局域网其它机器访问不到。
+- 换电脑或删掉 `config.json` 即彻底清除；不放心也可以随时点 **删除 key** 再重新粘贴。
 
 ## 操作说明
 
@@ -92,7 +99,7 @@ src/layers/basemaps.js   标准/卫星/注记图层
 src/geom/                geo.js（面积/距离/点在面内/格式化）、coortransform.js（GCJ↔WGS）
 src/data/                datav.js amap.js osm.js admin-index.js
 src/highlight/           store.js（集合/配色/持久化/命中）、render.js（矢量面渲染）
-src/ui/                  search.js panel.js contextmenu.js draw.js measure.js route.js
+src/ui/                  search.js panel.js contextmenu.js draw.js measure.js route.js settings.js
 data/admin-index.json    行政区名称索引
 serve.mjs  启动.bat  config.example.json
 scripts/                 build-admin-index.mjs probe-sources.mjs probe-amap.mjs

@@ -15,6 +15,7 @@ html,
 body {
   margin: 0;
   height: 100%;
+  overflow: hidden;
   font: 14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
   color: var(--ink);
 }
@@ -33,8 +34,10 @@ body {
   right: 12px;
   z-index: 1000;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+  row-gap: 8px;
   pointer-events: none;
 }
 
@@ -371,3 +374,54 @@ body {
 }
 
 .leaflet-container { font: inherit; }
+
+
+/* ---------- 设置弹窗 ---------- */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(20, 28, 40, 0.34);
+  display: grid;
+  place-items: center;
+}
+
+.modal {
+  width: min(430px, calc(100vw - 32px));
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(15, 25, 40, 0.28);
+  padding: 12px 14px 14px;
+}
+
+.st-state {
+  margin: 2px 0 8px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.st-state.on { color: #0a7d3f; }
+
+.st-row { display: flex; gap: 8px; align-items: center; }
+.st-row input[type='password'],
+.st-row input[type='text'] {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px 9px;
+  font-family: ui-monospace, Consolas, monospace;
+  outline: none;
+}
+.st-row input:focus { border-color: var(--brand); }
+.st-eye { font-size: 12px; color: var(--ink-2); white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+
+.st-actions { display: flex; gap: 8px; margin: 10px 0 4px; }
+.st-actions .btn-primary,
+.st-actions .ghost { flex: 1; }
+.st-actions .danger { color: #c62828; }
+.st-actions .danger:hover { border-color: #e57373; background: #ffecec; color: #c62828; }
+
+.st-note { margin: 7px 0 0; font-size: 12px; line-height: 1.65; color: var(--ink-2); }
+.st-note code { background: #f2f4f8; padding: 0 4px; border-radius: 4px; }
+.st-note a { color: var(--brand); }
+.st-note.warn { color: #b35900; }

@@ -31,6 +31,7 @@
         <button class="tool" data-tool="route" title="两点路径规划">路径</button>
         <button class="tool" id="fitAll" title="缩放至全部高亮区域">全部区域</button>
         <button class="tool danger" id="clearAll" title="清除全部高亮">清除</button>
+        <button class="tool" id="settingsBtn" title="配置高德 Web 服务 key（只存本机）">设置</button>
       </nav>
     </header>
 
@@ -79,6 +80,40 @@
     </footer>
 
     <div id="ctxMenu" class="ctx hidden"></div>
+
+    <div id="settingsMask" class="modal-mask hidden">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="stTitle">
+        <div class="rc-head">
+          <b id="stTitle">高德 Web 服务 Key</b>
+          <button id="stClose" class="ghost" title="关闭">✕</button>
+        </div>
+        <p class="st-state" id="stState">当前：未配置（免 key 模式）</p>
+        <div class="st-row">
+          <input
+            id="stKey"
+            type="password"
+            placeholder="粘贴 key；留空点保存即删除"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+          />
+          <label class="st-eye"><input type="checkbox" id="stShow" />显示</label>
+        </div>
+        <div class="st-actions">
+          <button id="stSave" class="btn-primary">保存</button>
+          <button id="stDelete" class="ghost danger">删除 key</button>
+        </div>
+        <p class="st-note">
+          key 只由本地服务写进同目录 <code>config.json</code>（已在 <code>.gitignore</code> 里），转发高德请求时由服务端注入；
+          前端代码、页面 DOM 与 git 历史都不会出现明文，服务也只监听 127.0.0.1。
+        </p>
+        <p class="st-note">
+          申请：<a href="https://lbs.amap.com" target="_blank" rel="noreferrer">lbs.amap.com</a>
+          → 注册并实名 → 控制台创建应用 → 添加 key，服务平台要选<b>「Web 服务」</b>（不是 Web 端 JS API）。
+        </p>
+        <p class="st-note" id="stWarn"></p>
+      </section>
+    </div>
     <div id="toast" class="toast hidden"></div>
 
     <script src="vendor/leaflet.js"></script>
