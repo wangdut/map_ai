@@ -1,15 +1,13 @@
 import { amapReady, route as amapRoute, geocode, searchPOI, searchAround, regeo } from '../data/amap.js';
 import { routeWithOsrm, geocodeWithPhoton } from '../data/osm.js';
 import { haversine, formatDistance, formatDuration } from '../geom/geo.js';
+import { esc } from './escape.js';
 
 const LINE_COLOR = '#0091ff';
 const MODE_LABEL = { driving: '驾车', walking: '步行', bicycling: '骑行', transit: '公交' };
 
 /** 允许直接粘贴「纬度,经度」，但界面上永远以地名示人 */
 const LL = /^(-?\d+(?:\.\d+)?)\s*[,，]\s*(-?\d+(?:\.\d+)?)$/;
-
-const esc = (s) =>
-  String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /** 「广州石化小学，大门」→ { subject: '广州石化小学', sub: '大门' } */
 export function splitSubject(text) {

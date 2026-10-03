@@ -9,12 +9,18 @@ import { createDrawTool } from './ui/draw.js';
 import { createMeasureTool } from './ui/measure.js';
 import { createRouteTool } from './ui/route.js';
 import { createSettings } from './ui/settings.js';
+import { esc } from './ui/escape.js';
 import { probeOsm } from './data/osm.js';
 import { amapReady, regeo } from './data/amap.js';
 import { findAdmin, searchAdmin, loadAdminIndex, LEVEL_LABEL } from './data/admin-index.js';
 import { formatArea } from './geom/geo.js';
 
-const state = { expandChildren: false, osm: { nominatim: false, photon: false, osrm: false }, activeTool: null };
+const state = {
+  granularity: 'self',
+  showParent: true,
+  osm: { nominatim: false, photon: false, osrm: false },
+  activeTool: null,
+};
 
 const toastEl = document.getElementById('toast');
 const tipEl = document.getElementById('tip');
@@ -48,8 +54,9 @@ window.map = map;
 
 const renderer = createRenderer(map, store);
 const pointMarkers = [];
+let streetMarkers = [];
 
-function addPointMarker(latlng, name) {
+function makePointMarker(latlng, name) {
   const marker = L.circleMarker(latlng, {
     radius: 6,
     color: '#e53935',
@@ -57,14 +64,23 @@ function addPointMarker(latlng, name) {
     fillColor: '#fff',
     fillOpacity: 0.95,
   }).addTo(map);
-  marker.bindTooltip(name, { permanent: true, direction: 'top', offset: [0, -8], className: 'hl-label' }).openTooltip();
-  pointMarkers.push(marker);
-  map.panTo(latlng);
+  marker.bindTooltip(esc(name), { permanent: true, direction: 'top', offset: [0, -8], className: 'hl-label' }).openTooltip();
   return marker;
 }
 
-const esc = (s) =>
-  String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function addPointMarker(latlng, name, { pan = true } = {}) {
+  const marker = makePointMarker(latlng, name);
+  pointMarkers.push(marker);
+  if (pan) map.panTo(latlng);
+  return marker;
+}
+
+/** 街道级没有轮廓，退一步只铺中心点；重复调用时替换上一批而不是叠加 */
+function addStreetPoints(points) {
+  streetMarkers.forEach((m) => map.removeLayer(m));
+  streetMarkers = points.map((p) => makePointMarker(p.center, p.name));
+  map.fitBounds(L.latLngBounds(streetMarkers.map((m) => m.getLatLng())), { padding: [40, 40], maxZoom: 13 });
+}
 
 let dialogEl = null;
 function closeDialog() {
@@ -133,7 +149,17 @@ function explainNoOutline({ name, latlng, extra = '', actions = [] }) {
   });
 }
 
-const ui = { toast, setTip, askName: (title, def) => window.prompt(title, def), addPointMarker, dialog, esc, explainNoOutline };
+let panel = null;
+const ui = {
+  toast,
+  setTip,
+  askName: (title, def) => window.prompt(title, def),
+  addPointMarker,
+  addStreetPoints,
+  dialog,
+  explainNoOutline,
+  setAdminScope: (row, opts) => panel?.setScope(row, opts),
+};
 
 const basemaps = createBasemaps(map);
 const search = createSearch({ renderer, ui, state });
@@ -144,11 +170,16 @@ const measure = createMeasureTool(map, ui);
 
 const settings = createSettings({ ui, onChange: updateSourceFlag });
 
-createPanel({
-  onExpandChange: (v) => {
-    state.expandChildren = v;
-    toast(v ? '已开启「展开下级」：搜索省/市会把它的所有子分区各上一色' : '已关闭「展开下级」');
+panel = createPanel({
+  onGranularityChange: (v) => {
+    state.granularity = v;
+    search.applyScope();
   },
+  onShowParentChange: (v) => {
+    state.showParent = v;
+    search.applyScope();
+  },
+  onListStreets: () => search.listStreetPoints(),
   onToast: toast,
   onFit: (id) => renderer.fitItem(id),
 });
@@ -179,6 +210,8 @@ document.getElementById('clearAll').addEventListener('click', () => {
   measure.reset();
   route.clear();
   pointMarkers.splice(0).forEach((m) => map.removeLayer(m));
+  streetMarkers.forEach((m) => map.removeLayer(m));
+  streetMarkers = [];
   toast('已清除全部高亮与临时标记');
 });
 
@@ -231,7 +264,7 @@ async function adminLevelEntries(latlng) {
   const chain = adminChainOf(item);
   const rows = chain.map((a) => ({
     label: `${esc(a.n)} · ${LEVEL_LABEL[a.l] || a.l}`,
-    run: () => search.highlightAdmin(adminRowOf(a)),
+    run: () => search.highlightAdmin(adminRowOf(a), { exact: true }),
   }));
   if (g.town) {
     const deepest = chain[0];
@@ -245,7 +278,7 @@ async function adminLevelEntries(latlng) {
           actions: [
             {
               label: `高亮所属 ${deepest.n}（${LEVEL_LABEL[deepest.l] || deepest.l}）`,
-              run: () => search.highlightAdmin(adminRowOf(deepest)),
+              run: () => search.highlightAdmin(adminRowOf(deepest), { exact: true }),
             },
           ],
         }),

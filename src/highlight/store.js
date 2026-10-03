@@ -31,6 +31,7 @@ export const store = {
   items: [],
   focusId: null,
   listeners: new Set(),
+  batch: 0,
 
   subscribe(fn) {
     this.listeners.add(fn);
@@ -38,6 +39,7 @@ export const store = {
   },
 
   emit(event = 'change') {
+    if (this.batch) return;
     this.listeners.forEach((fn) => fn(this.items, event, this.focusId));
   },
 
@@ -65,8 +67,15 @@ export const store = {
     return item;
   },
 
-  addMany(list) {
-    return list.map((p) => this.add(p));
+  /** 批量写入期间压掉通知，结束后只 emit 一次：几百块区域逐条重绘会卡住主线程 */
+  transaction(fn, event = 'change') {
+    this.batch++;
+    try {
+      return fn();
+    } finally {
+      this.batch--;
+      if (!this.batch) this.emit(event);
+    }
   },
 
   remove(id) {
@@ -109,7 +118,10 @@ export const store = {
 
   persist() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.items));
+      const json = JSON.stringify(this.items);
+      // 批量高亮几十上百块时几何总量能到几 MB，超配额直接跳过而不是反复抛错
+      if (json.length > 4_000_000) return;
+      localStorage.setItem(STORAGE_KEY, json);
     } catch {
       /* 几何过大时忽略存储失败 */
     }

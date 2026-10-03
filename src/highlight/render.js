@@ -33,8 +33,9 @@ export function createRenderer(map, store) {
       style: styleOf(item, focused),
     }).addTo(map);
 
+    // 批量高亮几十上百块时，逐块贴 DOM 名称标签会糊成一片，只保留面板里的列表
     let label = null;
-    if (item.centroid && map.getZoom() >= 3) {
+    if (item.centroid && map.getZoom() >= 3 && store.items.length <= 24) {
       label = L.tooltip({
         pane: LABEL_PANE,
         permanent: true,
@@ -66,7 +67,15 @@ export function createRenderer(map, store) {
     });
   }
 
-  store.subscribe(sync);
+  /** 只是换高亮对象时改样式即可：批量高亮上百块时整层重建会让鼠标悬停卡成幻灯片 */
+  function refreshFocus() {
+    store.items.forEach((item) => {
+      const entry = layers.get(item.id);
+      if (entry) entry.shape.setStyle(styleOf(item, store.focusId === item.id));
+    });
+  }
+
+  store.subscribe((items, event) => (event === 'focus' ? refreshFocus() : sync()));
 
   const toLatLngBox = ([[minLng, minLat], [maxLng, maxLat]]) => [
     [minLat, minLng],

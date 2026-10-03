@@ -219,6 +219,60 @@ body {
   font-size: 12px;
 }
 
+/* ---------- 面板：批量高亮的粒度控制 ---------- */
+.gran {
+  display: grid;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  /* 列表上百块要滚动，控制条钉在顶部才不用翻回去改粒度 */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card);
+}
+
+.gran-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gran-row .k {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.gran select {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 4px;
+  background: #fff;
+}
+
+.gran input[type='checkbox'] {
+  accent-color: var(--brand);
+}
+
+.gran-scope {
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+.gran-scope em {
+  font-style: normal;
+  color: #b45309;
+}
+
+.gran-street {
+  text-align: left;
+}
+
 .panel-body { max-height: 52vh; overflow: auto; }
 .panel.collapsed .panel-body,
 .panel.collapsed .matrix { display: none; }
@@ -261,6 +315,7 @@ body {
 .matrix td { border: 1px solid var(--line); padding: 3px 4px; text-align: center; }
 .matrix th { background: #f7f9fc; font-weight: 600; }
 .matrix td.self { color: #c4c9d2; }
+.matrix .note { margin: 0; color: var(--ink-2); line-height: 1.5; }
 
 .hint { margin: 0; padding: 10px 12px; color: var(--ink-2); font-size: 12px; }
 
