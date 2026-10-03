@@ -9,6 +9,8 @@ import { createDrawTool } from './ui/draw.js';
 import { createMeasureTool } from './ui/measure.js';
 import { createRouteTool } from './ui/route.js';
 import { createSettings } from './ui/settings.js';
+import { createFeatureMenu } from './ui/features.js';
+import { createPosterTool } from './ui/poster.js';
 import { esc } from './ui/escape.js';
 import { probeOsm } from './data/osm.js';
 import { amapReady, regeo } from './data/amap.js';
@@ -169,6 +171,18 @@ const draw = createDrawTool(map, ui, { onCreated: (item) => renderer.fitItem(ite
 const measure = createMeasureTool(map, ui);
 
 const settings = createSettings({ ui, onChange: updateSourceFlag });
+
+const poster = createPosterTool(map, ui);
+
+/** 顶栏「功能」菜单：以后新增的功能都往这个数组里加一条 */
+const features = createFeatureMenu([
+  {
+    id: 'poster',
+    label: '导出城市地图艺术海报',
+    hint: '框住想留的范围，抓矢量瓦片去字重着色，合成高清 PNG',
+    run: () => poster.open(),
+  },
+]);
 
 panel = createPanel({
   onGranularityChange: (v) => {
@@ -337,6 +351,8 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (dialogEl) return closeDialog();
     if (settings.isOpen) return settings.close();
+    if (poster.isOpen) return poster.close();
+    if (features.isOpen) return features.close();
     if (state.activeTool) setTool(state.activeTool);
     return;
   }

@@ -563,3 +563,113 @@ body {
 .dlg-body p { margin: 0 0 7px; }
 .dlg-body code { background: #f2f4f8; padding: 0 4px; border-radius: 4px; font-size: 12px; }
 .dlg-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+
+/* ---------- 顶栏「功能」菜单：以后新增功能都挂这里，不再加控件 ---------- */
+.feature-wrap { position: relative; }
+
+.feature-menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  z-index: 1001;
+  min-width: 250px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 5px;
+}
+
+.feature-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 7px;
+  padding: 7px 9px;
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.feature-menu button:hover { background: #f1f7ff; }
+.feature-menu button em { display: block; font-style: normal; font-size: 11.5px; color: var(--ink-2); margin-top: 2px; }
+
+/* ---------- 海报取景框与卡片 ---------- */
+body.poster-open .layer-switch { display: none; }
+
+.poster-frame {
+  position: absolute;
+  z-index: 900;
+  pointer-events: none;
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 9999px rgba(16, 22, 30, 0.4), inset 0 0 0 1px rgba(0, 0, 0, 0.22);
+}
+
+.poster-frame.busy { border-color: #7fd0ff; }
+.poster-frame .pf-tag {
+  position: absolute;
+  left: -1.5px;
+  top: -25px;
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: rgba(16, 22, 30, 0.62);
+  padding: 3px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.poster-card {
+  position: absolute;
+  left: 12px;
+  top: 118px;
+  z-index: 1000;
+  width: 342px;
+  max-height: calc(100% - 348px);
+  overflow: auto;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 10px 12px;
+}
+
+.pc-body { display: grid; gap: 7px; font-size: 12.5px; }
+.pc-row { display: flex; align-items: center; gap: 7px; }
+.pc-row .k { flex: none; width: 46px; color: var(--ink-2); }
+.pc-row input:not([type='checkbox']) { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; outline: none; }
+.pc-row input:focus { border-color: var(--brand); }
+.pc-row.inline { gap: 6px; }
+.pc-row.inline input { width: 15px; height: 15px; }
+.pc-row.inline span { color: var(--ink); }
+
+.pc-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.pc-chip {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.pc-chip.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+.pc-chip.swatch i {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid;
+  display: inline-grid;
+  place-items: center;
+}
+.pc-chip.swatch i b { width: 8px; height: 8px; border-radius: 50%; display: block; }
+
+.pc-note { color: var(--ink-2); font-size: 11.5px; line-height: 1.5; min-height: 17px; }
+.pc-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.pc-bar { height: 4px; border-radius: 3px; background: #e8ecf2; overflow: hidden; }
+.pc-bar i { display: block; height: 100%; width: 0; background: var(--brand); transition: width 0.12s; }
+.pc-preview { border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: #fff; }
+.pc-preview img { display: block; width: 100%; }
