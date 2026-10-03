@@ -255,7 +255,8 @@ async function adminLevelEntries(latlng) {
 }
 
 map.on('contextmenu', (e) => {
-  if (state.activeTool) return;
+  // 绘制/测距自己消费地图点击，菜单会干扰；路径规划不消费点击，右键取点正是它的主要输入方式
+  if (state.activeTool && state.activeTool !== 'route') return;
   const latlng = [e.latlng.lat, e.latlng.lng];
   const hit = store.hitTest(latlng);
   const entries = [];

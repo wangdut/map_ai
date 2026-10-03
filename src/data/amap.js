@@ -98,6 +98,24 @@ export async function poiOutlineFallback(poi) {
   };
 }
 
+/** 高德的 city/province/district 在无该项时会返回空数组，统一成字符串 */
+const str = (v) => (typeof v === 'string' ? v : '');
+
+function mapPoi(p) {
+  return {
+    kind: 'poi',
+    id: `amap:${p.id}`,
+    name: p.name,
+    address: typeof p.address === 'string' ? p.address : '',
+    type: (p.type || '').split(';').pop(),
+    adcode: str(p.adcode),
+    cityName: str(p.cityname),
+    latlng: p.location ? pair(p.location).reverse() : null,
+    geometry: typeof p.polygon === 'string' && p.polygon.includes(';') ? parsePolylineString(p.polygon) : null,
+    source: 'amap',
+  };
+}
+
 export async function searchPOI(keyword, { city = '', limit = 10 } = {}) {
   const data = await get('/v3/place/text', {
     keywords: keyword,
@@ -107,17 +125,21 @@ export async function searchPOI(keyword, { city = '', limit = 10 } = {}) {
     page: 1,
     extensions: 'all',
   });
-  return (data.pois || []).map((p) => ({
-    kind: 'poi',
-    id: `amap:${p.id}`,
-    name: p.name,
-    address: typeof p.address === 'string' ? p.address : '',
-    type: (p.type || '').split(';').pop(),
-    adcode: p.adcode,
-    latlng: p.location ? pair(p.location).reverse() : null,
-    geometry: typeof p.polygon === 'string' && p.polygon.includes(';') ? parsePolylineString(p.polygon) : null,
-    source: 'amap',
-  }));
+  return (data.pois || []).map(mapPoi);
+}
+
+/** 围绕中心点搜（「主体，附属」写法里的附属点，如某学校的大门） */
+export async function searchAround(latlng, keyword, { radius = 2000, limit = 10 } = {}) {
+  const data = await get('/v3/place/around', {
+    location: `${latlng[1]},${latlng[0]}`,
+    keywords: keyword,
+    radius,
+    offset: Math.min(limit, 25),
+    page: 1,
+    sortrule: 'distance',
+    extensions: 'all',
+  });
+  return (data.pois || []).map(mapPoi);
 }
 
 export async function geocode(address, city = '') {
@@ -131,9 +153,6 @@ export async function geocode(address, city = '') {
     source: 'amap',
   }));
 }
-
-/** 高德的 city/province/district 在无该项时会返回空数组，统一成字符串 */
-const str = (v) => (typeof v === 'string' ? v : '');
 
 export async function regeo(latlng, radius = 500) {
   const data = await get('/v3/geocode/regeo', {

@@ -57,8 +57,16 @@
 
     <section class="route-card hidden" id="routeCard">
       <div class="rc-head"><b>路径规划</b><button id="rcClose" class="ghost" title="关闭">✕</button></div>
-      <div class="rc-row"><span class="dot from">起</span><input id="rcFrom" placeholder="起点地址，或在地图上右键取点" /></div>
-      <div class="rc-row"><span class="dot to">终</span><input id="rcTo" placeholder="终点地址" /></div>
+      <div class="rc-row">
+        <span class="dot from">起</span>
+        <input id="rcFrom" placeholder="起点地名，如：广州石化小学，大门" autocomplete="off" />
+        <div class="rc-sug hidden" id="rcFromSug"></div>
+      </div>
+      <div class="rc-row">
+        <span class="dot to">终</span>
+        <input id="rcTo" placeholder="终点地名，或在地图上右键取点" autocomplete="off" />
+        <div class="rc-sug hidden" id="rcToSug"></div>
+      </div>
       <div class="rc-modes" id="rcModes">
         <button data-mode="driving" class="active">驾车</button>
         <button data-mode="walking">步行</button>

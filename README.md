@@ -77,13 +77,14 @@ node serve.mjs          # 或双击 启动.bat（会顺便打开浏览器）
 ## 自检
 
 ```bash
-node --test tests/geom.test.mjs      # 8 项：面积公式、haversine、点在面内（带洞）、坐标互转、真实边界面积
+node --test tests/geom.test.mjs tests/route.test.mjs   # 10 项：面积公式、haversine、点在面内（带洞）、坐标互转、真实边界面积、高德 polyline 解析、等面积圆反推、起终点写法拆分
 node scripts/probe-sources.mjs       # 打印当前网络下各数据源可用性
 ```
 
 ## 已知限制（说实话）
 
-- 本机网络下 **Nominatim / Overpass / tile.openstreetmap.org 全部不可达**（前者超时、Overpass 返回 406、OSM 瓦片 DNS 失败），所以「输入任意 POI 就自动出现真实轮廓」只能靠高德 key，且取决于高德是否对该 POI 返回 AOI 边界；拿不到轮廓时，程序会明确提示改用「绘制区域」，不会假装成功。
+- 本机网络下 **Nominatim / Overpass / tile.openstreetmap.org 全部不可达**（前者超时、Overpass 返回 406、OSM 瓦片 DNS 失败），含中国数据的 Overpass 镜像也没找到可用的，所以细粒度边界只能指望高德。
+- 用个人 key 实测：`place/text`、`place/detail`（v3/v5）、`place/around` **都不返回轮廓字段**；`config/district` 的 `polyline` **只到区县级**，乡镇街道能识别（`level=street`）但边界串长度为 0。因此校园、企业、小区这一级改用 `regeo` 的 `aois[].area` 画**等面积圆**——位置与面积是真的、形状是近似的，标签和提示里都写明了；街道/村这一级拿不到面积也拿不到轮廓，程序会弹窗说明实测依据并引导改用「绘制区域」描边，不会假装成功。
 - 高德 key 的个人配额有限，且 `restapi` 对无 referer 的服务端调用有 QPS 限制；批量抓取请自行加间隔。
 - `启动.bat` 固定打开 8080 端口；若在 `config.json` 改了 `port`，请手动访问对应端口。
 - 手绘区域只存顶点，不保存影像底图快照；换设备需要同步的话得自己导出。
