@@ -72,6 +72,25 @@ test('MultiPolygon 面积相加、内环相减', () => {
   assert.ok(withHole < single && single - withHole < ringArea(hole) * 1.001);
 });
 
+test('高德 district 的 polyline 串解析（实测格式：lng,lat 分号分隔、| 分隔多面）', async () => {
+  const { parsePolylineString } = await import('../src/data/amap.js');
+  const single = '113.067667,23.231852;113.066605,23.232249;113.065721,23.232928;113.065393,23.233100;113.067667,23.231852';
+  const g1 = parsePolylineString(single);
+  assert.equal(g1.type, 'Polygon');
+  assert.equal(g1.coordinates[0].length, 5);
+  assert.deepEqual(g1.coordinates[0][0], [113.067667, 23.231852], 'GeoJSON 必须是 [lng, lat] 轴序');
+
+  const multi = `${single}|113.10,23.20;113.11,23.20;113.11,23.21;113.10,23.20`;
+  const g2 = parsePolylineString(multi);
+  assert.equal(g2.type, 'MultiPolygon');
+  assert.equal(g2.coordinates.length, 2);
+
+  // 街道级高德返回空串（实测 polyline 长度为 0），必须安静返回 null
+  assert.equal(parsePolylineString(''), null);
+  assert.equal(parsePolylineString(undefined), null);
+  assert.equal(parsePolylineString('113.1,23.1;113.2,23.2'), null, '不足 3 点不成面');
+});
+
 test('等面积圆半径反推自洽', () => {
   const area = 8_200_000;
   const geo = circleGeometry([23.16, 113.38], radiusFromArea(area));
