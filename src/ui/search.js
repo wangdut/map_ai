@@ -1,6 +1,6 @@
 import { searchAdmin, loadAdminIndex } from '../data/admin-index.js';
 import { regionOf, childrenOf } from '../data/datav.js';
-import { amapReady, searchPOI } from '../data/amap.js';
+import { amapReady, searchPOI, poiOutlineFallback } from '../data/amap.js';
 import { searchWithNominatim } from '../data/osm.js';
 import { store } from '../highlight/store.js';
 import { circleGeometry, radiusFromArea, formatArea } from '../geom/geo.js';
@@ -45,7 +45,7 @@ export function createSearch({ renderer, ui, state }) {
     if (amapReady()) {
       try {
         (await searchPOI(q, { limit: 6 })).forEach((p) =>
-          rows.push({ ...p, tag: `兴趣点${p.geometry ? '·有轮廓' : p.aoiArea ? '·有面积' : ''}`, sub: p.address }),
+          rows.push({ ...p, tag: `兴趣点${p.geometry ? '·有轮廓' : ''}`, sub: p.address }),
         );
       } catch (e) {
         rows.push({ kind: 'error', name: `高德搜索：${e.message}` });
@@ -117,19 +117,23 @@ export function createSearch({ renderer, ui, state }) {
       }
 
       if (r.latlng) ui.addPointMarker(r.latlng, r.name);
-      if (r.aoiArea) {
+      const fallback = await poiOutlineFallback(r);
+      if (fallback.aoiArea) {
+        const parts = fallback.aoiNames.length;
         const item = store.add({
           id: `aoi:${r.id}`,
-          name: `${r.name}（等面积圆）`,
-          subtitle: '范围近似，非真实轮廓',
+          name: `${r.name}（等面积示意）`,
+          subtitle: '面积来自高德 AOI，形状为等面积圆、非真实轮廓',
           source: 'aoi',
-          geometry: circleGeometry(r.latlng, radiusFromArea(r.aoiArea)),
-          area: r.aoiArea,
+          geometry: circleGeometry(r.latlng, radiusFromArea(fallback.aoiArea)),
+          area: fallback.aoiArea,
         });
         renderer.fitItem(item.id);
-        ui.toast(`${r.name}：数据源只给出面积 ${formatArea(r.aoiArea)}，已画等面积圆；真实轮廓请用「绘制区域」描边`);
+        ui.toast(
+          `${r.name}：高德只给出面积 ${formatArea(fallback.aoiArea)}${parts > 1 ? `（${parts} 个同主体分区合计）` : ''}，已画等面积圆；真实轮廓请用「绘制区域」描边`,
+        );
       } else {
-        ui.toast(`${r.name}：已定位到点。当前数据源没有它的轮廓，请用「绘制区域」沿卫星图描边`);
+        ui.explainNoOutline({ name: r.name, latlng: r.latlng });
       }
     } catch (e) {
       ui.toast(`高亮失败：${e.message}`);

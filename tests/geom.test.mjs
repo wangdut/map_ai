@@ -92,10 +92,12 @@ test('高德 district 的 polyline 串解析（实测格式：lng,lat 分号分�
 });
 
 test('等面积圆半径反推自洽', () => {
-  const area = 8_200_000;
-  const geo = circleGeometry([23.16, 113.38], radiusFromArea(area));
-  const got = geometryArea(geo);
-  assert.ok(Math.abs(got - area) / area < 0.01, `圆面积 ${got} 与目标 ${area} 偏差过大`);
+  // 1512770.5 是实测高德 AOI「华南农业大学西区」的面积，小面积更易暴露反推误差
+  for (const area of [1_512_770.5, 8_200_000]) {
+    const geo = circleGeometry([23.16, 113.38], radiusFromArea(area));
+    const got = geometryArea(geo);
+    assert.ok(Math.abs(got - area) / area < 0.01, `圆面积 ${got} 与目标 ${area} 偏差过大`);
+  }
 });
 
 test('WGS84 与 GCJ02 互转偏移合理且可逆', () => {

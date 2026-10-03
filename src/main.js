@@ -63,7 +63,77 @@ function addPointMarker(latlng, name) {
   return marker;
 }
 
-const ui = { toast, setTip, askName: (title, def) => window.prompt(title, def), addPointMarker };
+const esc = (s) =>
+  String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+let dialogEl = null;
+function closeDialog() {
+  dialogEl?.remove();
+  dialogEl = null;
+}
+
+/**
+ * 通用说明弹窗。html 由本仓库自己拼接（其中的外部数据需调用方先 esc()）。
+ * buttons: [{ label, run?, primary? }]
+ */
+function dialog({ title, html, buttons = [] }) {
+  closeDialog();
+  const mask = document.createElement('div');
+  mask.className = 'modal-mask';
+  mask.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
+    <div class="dlg-head"><b>${esc(title)}</b><button class="ghost" data-x title="关闭">✕</button></div>
+    <div class="dlg-body">${html || ''}</div>
+    ${
+      buttons.length
+        ? `<div class="dlg-actions">${buttons
+            .map((b, i) => `<button class="${b.primary ? 'btn-primary' : 'ghost'}" data-b="${i}">${esc(b.label)}</button>`)
+            .join('')}</div>`
+        : ''
+    }
+  </div>`;
+  document.body.appendChild(mask);
+  dialogEl = mask;
+  mask.addEventListener('click', (e) => {
+    const hit = e.target.closest('button');
+    if (!hit) return e.target === mask ? closeDialog() : undefined;
+    if (hit.hasAttribute('data-x')) return closeDialog();
+    if (hit.dataset.b === undefined) return;
+    const b = buttons[Number(hit.dataset.b)];
+    closeDialog();
+    b?.run?.();
+  });
+  return mask;
+}
+
+/** 数据源给不出轮廓时的统一说明口径（搜索到的 POI 与右键的街道级都走这里） */
+function explainNoOutline({ name, latlng, extra = '', actions = [] }) {
+  if (!latlng) return toast(`${name}：连中心点都拿不到`);
+  dialog({
+    title: `「${name}」拿不到真实轮廓`,
+    html: `<p>已用你的 key 实测：高德开放平台对个人认证 key 的
+      <code>place/text</code>、<code>place/detail</code>（v3 与 v5）、<code>place/around</code>
+      都<b>不返回轮廓字段</b>；<code>config/district</code> 能识别乡镇街道但边界串为空。</p>
+      <p>另外阿里云 DataV 最细只到区县级，本机也连不上含中国数据的 OSM 边界服务，所以这一级只能定位到点。</p>
+      ${extra ? `<p>${extra}</p>` : ''}
+      <p>想要真实范围：切到<b>卫星</b>底图后用「绘制区域」沿边界描点，面积与周长会自动算出来。</p>`,
+    buttons: [
+      ...actions,
+      { label: '只标记中心点', run: () => addPointMarker(latlng, name) },
+      {
+        label: '沿卫星影像描边',
+        primary: true,
+        run: () => {
+          map.panTo(latlng);
+          if (map.getZoom() < 16) map.setZoom(16);
+          setTool('draw');
+          toast('已进入绘制模式：左键逐点描边，右键或回车闭合');
+        },
+      },
+    ],
+  });
+}
+
+const ui = { toast, setTip, askName: (title, def) => window.prompt(title, def), addPointMarker, dialog, esc, explainNoOutline };
 
 const basemaps = createBasemaps(map);
 const search = createSearch({ renderer, ui, state });
@@ -132,25 +202,56 @@ function updateZoomLabel() {
 map.on('zoomend', updateZoomLabel);
 updateZoomLabel();
 
-async function highlightAdminAt(latlng) {
-  if (!amapReady()) {
-    return toast(`反查「此处属于哪个行政区」需要高德 key。${NO_KEY_HINT}`);
+const adminRowOf = (a) => ({
+  kind: 'admin',
+  adcode: a.c,
+  name: a.n,
+  level: a.l,
+  levelLabel: LEVEL_LABEL[a.l] || a.l,
+  path: a.path,
+});
+
+/** 沿索引的父链把「此处」各级行政区取出来，细 → 粗 */
+function adminChainOf(item) {
+  const chain = [];
+  for (let a = item; a && chain.length < 6; a = a.p ? findAdmin(a.p) : null) chain.push(a);
+  return chain;
+}
+
+async function adminLevelEntries(latlng) {
+  if (!amapReady()) throw new Error(`反查需要高德 key：${NO_KEY_HINT}`);
+  const g = await regeo(latlng);
+  await loadAdminIndex();
+  let item = g.adcode ? findAdmin(g.adcode) : null;
+  if (!item) {
+    const guess = searchAdmin([g.province, g.city, g.district].filter(Boolean).join(''), 1)[0];
+    item = guess ? findAdmin(guess.adcode) : null;
   }
-  try {
-    const g = await regeo(latlng);
-    await loadAdminIndex();
-    const byCode = g.adcode ? findAdmin(g.adcode) : null;
-    const byName = byCode
-      ? null
-      : searchAdmin([g.city, g.district].filter(Boolean).join('') || g.province || '', 1)[0];
-    if (!byCode && !byName) return toast(`${g.name || ''}：行政区索引里没有匹配项`);
-    const r = byCode
-      ? { kind: 'admin', adcode: byCode.c, name: byCode.n, level: byCode.l, levelLabel: LEVEL_LABEL[byCode.l], path: byCode.path }
-      : byName;
-    await search.highlightAdmin(r);
-  } catch (e) {
-    toast(`反查失败：${e.message}`);
+  if (!item) throw new Error(`${g.name || '此处'}：行政区索引里没有匹配项`);
+  const chain = adminChainOf(item);
+  const rows = chain.map((a) => ({
+    label: `${esc(a.n)} · ${LEVEL_LABEL[a.l] || a.l}`,
+    run: () => search.highlightAdmin(adminRowOf(a)),
+  }));
+  if (g.town) {
+    const deepest = chain[0];
+    rows.unshift({
+      label: `${esc(g.town)} · 乡镇街道`,
+      run: () =>
+        explainNoOutline({
+          name: g.town,
+          latlng,
+          extra: `高德能识别这一级（towncode <code>${esc(g.towncode || '无')}</code>），但实测其边界串长度为 0。`,
+          actions: [
+            {
+              label: `高亮所属 ${deepest.n}（${LEVEL_LABEL[deepest.l] || deepest.l}）`,
+              run: () => search.highlightAdmin(adminRowOf(deepest)),
+            },
+          ],
+        }),
+    });
   }
+  return rows;
 }
 
 map.on('contextmenu', (e) => {
@@ -159,7 +260,7 @@ map.on('contextmenu', (e) => {
   const hit = store.hitTest(latlng);
   const entries = [];
   if (hit) {
-    entries.push({ label: `取消高亮「${hit.name}」`, danger: true, run: () => store.remove(hit.id) });
+    entries.push({ label: `取消高亮「${esc(hit.name)}」`, danger: true, run: () => store.remove(hit.id) });
     entries.push({ label: '仅保留这一块', run: () => store.keepOnly(hit.id) });
     entries.push({
       label: '复制名称与面积',
@@ -186,13 +287,21 @@ map.on('contextmenu', (e) => {
       measure.addPoint(latlng);
     },
   });
-  if (!hit) entries.push({ label: '高亮此处所属行政区', run: () => highlightAdminAt(latlng) });
-  ctx.open(e, hit ? `${hit.name} · ${formatArea(hit.area)}` : `${latlng[0].toFixed(5)}, ${latlng[1].toFixed(5)}`, entries);
+  entries.push({
+    label: '高亮此处所属行政区',
+    children: () => adminLevelEntries(latlng),
+  });
+  ctx.open(
+    e,
+    hit ? `${esc(hit.name)} · ${formatArea(hit.area)}` : `${latlng[0].toFixed(5)}, ${latlng[1].toFixed(5)}`,
+    entries,
+  );
 });
 
 document.addEventListener('keydown', (e) => {
   const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName);
   if (e.key === 'Escape') {
+    if (dialogEl) return closeDialog();
     if (settings.isOpen) return settings.close();
     if (state.activeTool) setTool(state.activeTool);
     return;

@@ -346,6 +346,21 @@ body {
 .ctx button:hover { background: #f1f7ff; }
 .ctx button.danger:hover { background: #ffecec; color: #c62828; }
 
+.ctx-row { position: relative; }
+.ctx-row > button .ctx-caret { float: right; color: var(--ink-2); transition: transform 0.12s; }
+.ctx-row.open > button .ctx-caret { transform: rotate(90deg); }
+.ctx-sub { display: none; }
+.ctx-row.open > .ctx-sub {
+  display: block;
+  margin: 2px 0 4px 10px;
+  padding-left: 6px;
+  border-left: 2px solid var(--line);
+}
+.ctx-sub button { padding-left: 8px; font-size: 12.5px; }
+.ctx-sub button em { float: right; font-style: normal; color: var(--ink-2); margin-left: 10px; }
+.ctx button.disabled { color: var(--ink-2); cursor: default; }
+.ctx button.disabled:hover { background: transparent; }
+
 .toast {
   position: absolute;
   left: 50%;
@@ -425,3 +440,11 @@ body {
 .st-note code { background: #f2f4f8; padding: 0 4px; border-radius: 4px; }
 .st-note a { color: var(--brand); }
 .st-note.warn { color: #b35900; }
+
+/* ---------- 通用说明弹窗 ---------- */
+.dlg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dlg-head button { flex: none; padding: 2px 8px; }
+.dlg-body { margin: 8px 0 2px; font-size: 13px; line-height: 1.7; color: var(--ink); max-height: 56vh; overflow: auto; }
+.dlg-body p { margin: 0 0 7px; }
+.dlg-body code { background: #f2f4f8; padding: 0 4px; border-radius: 4px; font-size: 12px; }
+.dlg-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }

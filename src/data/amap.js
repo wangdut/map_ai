@@ -116,8 +116,6 @@ export async function searchPOI(keyword, { city = '', limit = 10 } = {}) {
     adcode: p.adcode,
     latlng: p.location ? pair(p.location).reverse() : null,
     geometry: typeof p.polygon === 'string' && p.polygon.includes(';') ? parsePolylineString(p.polygon) : null,
-    aoiArea: null,
-    aoiName: '',
     source: 'amap',
   }));
 }
