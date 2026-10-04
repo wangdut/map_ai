@@ -35,9 +35,12 @@
 ```bash
 cd map_ai
 node serve.mjs          # 或双击 启动.bat（会顺便打开浏览器）
+node stop.mjs           # 或双击 停止.bat（与启动对应，关掉后台的服务）
 ```
 
 浏览器打开 <http://localhost:8080>。**不启动服务也能用**：直接双击 `index.html` 即可，只是此时无法配置高德 key、且部分跨源请求会被浏览器拦掉，所以推荐走 `serve.mjs`。
+
+服务本体是一个 `node` 进程：关掉浏览器标签页并不会停它，窗口最小化了它照样占着 8080 端口和一份内存。正常停法是回到 `启动.bat` 那个黑色窗口按 `Ctrl+C`；窗口已经找不到了、或者怀疑有残留进程，就双击 `停止.bat`。脚本按 `PORT` 环境变量 → `config.json` 的 `port` → 8080 找端口（和 `serve.mjs` 同一套优先级，改过端口不会停错），只结束**正在监听**该端口的 `node.exe`；端口被别的程序占着时它不动手，只把 PID 和一行 `taskkill` 命令打出来让你自己决定；本来就没有服务则直说是停止状态。
 
 `serve.mjs` 做三件事：静态文件服务 + `/api/*` 反向代理（amap / datav / osrm / photon / esri / nominatim / overpass）+ `/api/settings` 保存高德 key。服务只监听 `127.0.0.1`，局域网其它机器访问不到；高德的 key 由服务端注入，**不会出现在前端代码与 git 里**。
 
@@ -148,7 +151,7 @@ src/ui/                  search.js panel.js contextmenu.js draw.js measure.js ro
 src/export/              artstyle.js（像素分类/去字/回填/闭运算/配色重映射）、tileprint.js（瓦片规划合成与海报排版）
 data/admin-index.json    行政区名称索引
 image/preview/           「效果展示」用的 1600px 预览（几 MB 一张的原图不入库）
-serve.mjs  启动.bat  config.example.json
+serve.mjs  stop.mjs  启动.bat  停止.bat  config.example.json
 scripts/                 build-admin-index.mjs probe-sources.mjs probe-amap.mjs
 tests/                   geom.test.mjs admin-tree.test.mjs route.test.mjs artstyle.test.mjs tileprint.test.mjs
 ```
