@@ -6,6 +6,30 @@
 
 ---
 
+## 效果展示
+
+以下五张都是本工具直接导出的成图，未做任何后期。仓库里存的是等比缩到长边 1600 px 的预览（`image/preview/`），导出原图仍留在本地的 `image/` 下（已被 git 忽略），说明里标的是**原图尺寸**。
+
+**广州 · 琥珀** — 原图 4472×3356（4:3，留白边）。主干道走橙、次干浅琥珀、普通路压成暖灰，水系用青蓝把整幅按住。
+
+![广州 · 琥珀](image/preview/01_广州_琥珀.webp)
+
+**香港 · 琥珀** — 原图 4472×3356（4:3）。海面归入水系连成整片青蓝，新界的绿地与路网才从纸白底色里浮出来。
+
+![香港 · 琥珀](image/preview/02_香港_琥珀.webp)
+
+**三亚 · 琥珀** — 原图 2533×4501（9:16 竖版，按行政轮廓裁切）。轮廓外直接留纸白，海与城的交界就是海报的边。
+
+![三亚 · 琥珀](image/preview/03_三亚_琥珀.webp)
+
+**哈尔滨 · 暗夜** — 原图 5326×3994（4:3，夜航图配色 + 叠下级区县界线 + 细框）。深色底上只留绿地与水系两类冷色，路网收到金黄与褐金两档。
+
+![哈尔滨 · 暗夜](image/preview/04_哈尔滨_暗夜.webp)
+
+**广州 · 暗夜** — 原图 6000×4501（巨幅档）。图上那枚朱红定位针是「标记我的位置」：海报上不写地名，只用符号点出这一点。
+
+![广州 · 暗夜，带位置标记](image/preview/05_广州_暗夜_位置标记.webp)
+
 ## 快速开始
 
 ```bash
@@ -123,6 +147,7 @@ src/highlight/           store.js（集合/配色/持久化/命中）、render.j
 src/ui/                  search.js panel.js contextmenu.js draw.js measure.js route.js settings.js features.js（功能菜单） poster.js（海报取景与导出） escape.js
 src/export/              artstyle.js（像素分类/去字/回填/闭运算/配色重映射）、tileprint.js（瓦片规划合成与海报排版）
 data/admin-index.json    行政区名称索引
+image/preview/           「效果展示」用的 1600px 预览（导出的原图留在本地 image/，不进仓库）
 serve.mjs  启动.bat  config.example.json
 scripts/                 build-admin-index.mjs probe-sources.mjs probe-amap.mjs
 tests/                   geom.test.mjs admin-tree.test.mjs route.test.mjs artstyle.test.mjs tileprint.test.mjs

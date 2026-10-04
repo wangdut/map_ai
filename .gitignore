@@ -7,3 +7,7 @@ config.json
 
 .shots/
 data/.pcas-code.json
+
+# 海报原图动辄几 MB，仓库只收 image/preview/ 下的 1600px 预览
+image/*
+!image/preview/
