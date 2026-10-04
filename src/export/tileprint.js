@@ -3,7 +3,7 @@ import { haversine } from '../geom/geo.js';
 
 const TILE = 256;
 const MAX_AMAP_ZOOM = 18;
-const MAX_CANVAS_PX = 30_000_000;
+const MAX_CANVAS_PX = 45_000_000;
 const SUBS = ['1', '2', '3', '4'];
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -65,21 +65,41 @@ export function frameSpan(map, frame) {
   };
 }
 
+/** 清晰度档位说的是「成图（含留白）长边像素」，这里换算成内框长边 */
+export function innerLongEdge(targetLongEdge, withMargin) {
+  return Math.round(clamp(targetLongEdge, 600, 8000) * (withMargin ? 1 - 2 * MARGIN_RATIO : 1));
+}
+
 /**
- * 反推成图参数：目标长边像素 → 需要的缩放级 → 瓦片网格。
- * 瓦片数或画布面积超限时降一级重算，绝不靠放大插值冒充高清。
+ * 原生抓取之后真正交付的成图尺寸。
+ * z 只能取整数，抓到的原生像素往往是档位的 1~2 倍，所以按档位精确降采样——降采样不丢信息，
+ * 反过来若原生像素不够（被瓦片数或画布面积压下了 z）就绝不放大冒充高清，原样交付并标出 capped。
  */
-export function planCapture(map, frame, targetLongEdge, opts = {}) {
-  const { maxTiles = 420 } = opts;
+export function posterDims(plan, innerPx, withMargin) {
+  const native = Math.max(plan.width, plan.height);
+  const scale = Math.min(1, innerPx / native);
+  const w = Math.round(plan.width * scale);
+  const h = Math.round(plan.height * scale);
+  const m = withMargin ? Math.round((Math.max(w, h) * MARGIN_RATIO) / (1 - 2 * MARGIN_RATIO)) : 0;
+  return { width: w + m * 2, height: h + m * 2, scale, capped: native < innerPx };
+}
+
+/**
+ * 反推抓取参数：内框长边像素 → 需要的整数缩放级 → 瓦片网格。
+ * 瓦片数或画布面积超限时降一级重算；原生像素只会多不会少，缺的部分由 posterDims 判定，不靠插值补。
+ */
+export function planCapture(map, frame, innerPx, opts = {}) {
+  const { maxTiles = 600 } = opts;
   const { nw, se } = frameCorners(map, frame);
   const lngSpan = Math.abs(se.lng - nw.lng) || 1e-6;
-  const target = clamp(targetLongEdge, 600, 8000);
+  // 墨卡托在局部是等比的，所以原生像素的长短边和取景框的长短边落在同一根轴上
+  const wantW = Math.max(1, innerPx * (frame.width / Math.max(frame.width, frame.height)));
   const measure = (z) => {
     const a = map.project(nw, z);
     const b = map.project(se, z);
     return { a, b, w: b.x - a.x, h: b.y - a.y };
   };
-  let z = clamp(Math.ceil(Math.log2((target * 360) / (lngSpan * TILE))), 1, MAX_AMAP_ZOOM);
+  let z = clamp(Math.ceil(Math.log2((wantW * 360) / (lngSpan * TILE))), 1, MAX_AMAP_ZOOM);
   let m = measure(z);
   let width = Math.round(m.w);
   let height = Math.round(m.h);
@@ -187,24 +207,17 @@ export function drawBoundaries(map, ctx, geometries, plan, { color, width, alpha
   ctx.restore();
 }
 
-/** 沿城市轮廓裁切：轮廓之外的地图像素挖成透明，露出底下的留白 */
+/** 沿城市轮廓裁切：用 destination-in 原地把轮廓之外的像素挖成透明，露出底下的留白，不再多开一张同尺寸画布 */
 function clipTo(map, canvas, geometries, plan) {
-  const mask = document.createElement('canvas');
-  mask.width = canvas.width;
-  mask.height = canvas.height;
-  const mctx = mask.getContext('2d');
-  mctx.fillStyle = '#fff';
-  mctx.beginPath();
-  for (const g of geometries) traceGeometry(map, mctx, g, plan);
-  mctx.fill('evenodd');
-  const out = document.createElement('canvas');
-  out.width = canvas.width;
-  out.height = canvas.height;
-  const octx = out.getContext('2d');
-  octx.drawImage(canvas, 0, 0);
-  octx.globalCompositeOperation = 'destination-in';
-  octx.drawImage(mask, 0, 0);
-  return out;
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  for (const g of geometries) traceGeometry(map, ctx, g, plan);
+  ctx.fill('evenodd');
+  ctx.restore();
+  return canvas;
 }
 
 /** 可选字体：只列各平台都有的家族，靠 fallback 兜底，不引外部字体 */
@@ -327,14 +340,28 @@ function layout(canvas, style, opts) {
   return out;
 }
 
+/** 降采样到档位声明的尺寸：多抓的那一截正好当超采样用，边缘更干净；不足则原样交付，不放大 */
+function resample(canvas, scale) {
+  if (scale >= 1) return canvas;
+  const out = document.createElement('canvas');
+  out.width = Math.round(canvas.width * scale);
+  out.height = Math.round(canvas.height * scale);
+  const ctx = out.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(canvas, 0, 0, out.width, out.height);
+  return out;
+}
+
 /**
  * 生成海报画布。opts：{ frame, target, style, title, subtitle, margin, frameLine,
  * boundaries, clip, onProgress,
  * titleFont, titleRatio, titleColor, subFont, subRatio, subColor }
- * 字号用「占成图长边的比例」，字色留 null 表示跟随配色的墨色。
+ * target 是成图（含留白）长边像素；字号用「占成图长边的比例」，字色留 null 表示跟随配色的墨色。
  */
 export async function renderPoster(map, opts) {
-  const plan = planCapture(map, opts.frame, opts.target);
+  const inner = innerLongEdge(opts.target, opts.margin);
+  const plan = planCapture(map, opts.frame, inner);
   const s = STYLES[opts.style] || STYLES.amber;
   const layer = document.createElement('canvas');
   layer.width = plan.width;
@@ -354,17 +381,19 @@ export async function renderPoster(map, opts) {
     { onProgress: opts.onProgress },
   );
 
-  const out = document.createElement('canvas');
-  out.width = plan.width;
-  out.height = plan.height;
-  const octx = out.getContext('2d');
-  octx.drawImage(opts.clip?.length ? clipTo(map, layer, opts.clip, plan) : layer, 0, 0);
+  const mapCanvas = opts.clip?.length ? clipTo(map, layer, opts.clip, plan) : layer;
   if (opts.boundaries?.length) {
-    drawBoundaries(map, octx, opts.boundaries, plan, {
+    drawBoundaries(map, mapCanvas.getContext('2d'), opts.boundaries, plan, {
       color: s.line,
       width: Math.max(1.2, plan.width / 1600),
       alpha: 0.85,
     });
   }
-  return { canvas: layout(out, opts.style, opts), plan, failed };
+  const dims = posterDims(plan, inner, opts.margin);
+  const scaled = resample(mapCanvas, dims.scale);
+  if (scaled !== mapCanvas) {
+    mapCanvas.width = 0;
+    mapCanvas.height = 0;
+  }
+  return { canvas: layout(scaled, opts.style, opts), plan, dims, failed };
 }

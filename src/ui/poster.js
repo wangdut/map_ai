@@ -8,7 +8,8 @@ import {
   frameRatio,
   fitFrame,
   TAG_ROOM,
-  MARGIN_RATIO,
+  innerLongEdge,
+  posterDims,
   FONTS,
   TITLE_SIZE_RATIO,
   SUB_SIZE_RATIO,
@@ -46,6 +47,7 @@ const RATIOS = [
   ['1:1.414', 1 / Math.SQRT2],
 ];
 
+/** 档位数值 = 成图（含留白）长边像素。z 只能取整数，抓取被瓦片数或画布面积上限压住时会达不到档位，界面上如实报实际尺寸 */
 const QUALITIES = [
   ['网页', 1600],
   ['高清', 3000],
@@ -150,14 +152,15 @@ export function createPosterTool(map, ui) {
     const note = card.querySelector('[data-note]');
     if (busy) return;
     try {
-      const plan = planCapture(map, f, target);
+      const inner = innerLongEdge(target, marginOn());
+      const plan = planCapture(map, f, inner);
+      const dims = posterDims(plan, inner, marginOn());
       const span = frameSpan(map, f);
-      const longEdge = Math.max(plan.width, plan.height);
-      const margin = marginOn() ? Math.round((longEdge * MARGIN_RATIO) / (1 - 2 * MARGIN_RATIO)) : 0;
       const label = RATIOS.find(([, v]) => v === ratio)?.[0] || '';
       note.textContent =
-        `成图 ${plan.width + margin * 2}×${plan.height + margin * 2} px（${label}）· z${plan.z} · ${plan.count} 块瓦片 · ` +
-        `覆盖约 ${span.kmX.toFixed(1)} × ${span.kmY.toFixed(1)} km`;
+        `成图 ${dims.width}×${dims.height} px（${label}）· z${plan.z} · ${plan.count} 块瓦片 · ` +
+        `覆盖约 ${span.kmX.toFixed(1)} × ${span.kmY.toFixed(1)} km` +
+        (dims.capped ? ' · 已到抓取上限，够不到该档位' : '');
     } catch (e) {
       note.textContent = `取景参数算不出来：${e.message}`;
     }
@@ -346,12 +349,12 @@ export function createPosterTool(map, ui) {
     const s = state();
     const px = mode === 'preview' ? 900 : target;
     const frame = frameRect();
-    const plan = planCapture(map, frame, px);
+    const plan = planCapture(map, frame, innerLongEdge(px, marginOn()));
     setBusy(true, '准备中…');
     let lastPaint = 0;
     try {
       const boundaries = await collectGeometries(s);
-      const { canvas, failed } = await renderPoster(map, {
+      const { canvas, dims, failed } = await renderPoster(map, {
         frame,
         target: px,
         style,
@@ -397,7 +400,11 @@ export function createPosterTool(map, ui) {
       a.download = file;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 8000);
-      ui.toast(`已导出 ${file}（${canvas.width}×${canvas.height}，z${plan.z}，${plan.count} 块瓦片）`);
+      const q = QUALITIES.find(([, v]) => v === target)?.[0] || '';
+      ui.toast(
+        `已导出 ${file}（${canvas.width}×${canvas.height}，z${plan.z}，${plan.count} 块瓦片）` +
+          (dims.capped ? ` · ${q}档已到抓取上限，按原生像素出图` : ''),
+      );
     } catch (e) {
       setBusy(false);
       ui.toast(`导出失败：${e.message || e}`);
