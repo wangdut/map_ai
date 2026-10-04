@@ -231,3 +231,19 @@ test('每一块像素都被写满且不透明', () => {
   artify(t.data, t.w, t.h, 'night');
   for (let i = 3; i < t.data.length; i += 4) assert.equal(t.data[i], 255);
 });
+
+test('每套配色字段齐全且互不撞色，任何一套都能完整重着色', () => {
+  const fields = ['paper', 'water', 'green', 'arterial', 'secondary', 'minor', 'line', 'ink'];
+  const keys = Object.keys(STYLES);
+  assert.ok(keys.length >= 7, `配色至少 7 套，实际 ${keys.length}`);
+  for (const k of keys) {
+    const s = STYLES[k];
+    for (const f of fields) assert.match(s[f], /^#[0-9a-f]{6}$/i, `${k}.${f} 不是合法 hex`);
+    const inks = ['water', 'green', 'arterial', 'secondary', 'minor'].map((f) => s[f]);
+    assert.equal(new Set(inks).size, inks.length, `${k}：五类墨色里有撞色的，图面会分不清`);
+    assert.notEqual(s.paper, s.arterial, `${k}：主干道与底色同色，路网会消失`);
+    const t = fakeTile();
+    artify(t.data, t.w, t.h, k);
+    for (let i = 0; i < t.data.length; i++) assert.ok(Number.isInteger(t.data[i]), `${k} 重着色后出现非整数值`);
+  }
+});

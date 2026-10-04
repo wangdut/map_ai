@@ -42,6 +42,54 @@ export const STYLES = {
     line: '#e6e1d3',
     ink: '#e6e1d3',
   },
+  /* 蓝染／蓝印花布：整幅只用一种颜料的不同浓度。水系偏青、主干道偏紫，靠色相而不是明度分开 */
+  indigo: {
+    label: '靛蓝',
+    paper: '#f2efe6',
+    water: '#0e5a7d',
+    green: '#a9c2c9',
+    arterial: '#2b3f77',
+    secondary: '#7b9ccb',
+    minor: '#d5dbe2',
+    line: '#26313f',
+    ink: '#26313f',
+  },
+  /* 龙泉青瓷：梅子青釉做底，路网是刻花后的深色积釉，水系另取一味湖绿 */
+  celadon: {
+    label: '青瓷',
+    paper: '#eef2e9',
+    water: '#4f8a8b',
+    green: '#c6dcbc',
+    arterial: '#2f5d53',
+    secondary: '#89ac96',
+    minor: '#dfe2d5',
+    line: '#2b3a34',
+    ink: '#2b3a34',
+  },
+  /* 赭石陶土：黄土纸配砖红主干道，水系故意用冷青，免得整幅糊成一片暖色 */
+  ochre: {
+    label: '赭石',
+    paper: '#f2e8d9',
+    water: '#3f6d7a',
+    green: '#c2b98a',
+    arterial: '#a8442a',
+    secondary: '#d9924f',
+    minor: '#e3d5bd',
+    line: '#40291d',
+    ink: '#40291d',
+  },
+  /* 暮紫藕荷：淡紫底配梅紫主干道，水系取普鲁士蓝紫，与暖紫的路网拉开 */
+  dusk: {
+    label: '暮紫',
+    paper: '#f3eff3',
+    water: '#46589c',
+    green: '#cbc6d6',
+    arterial: '#7c3b62',
+    secondary: '#b98aa6',
+    minor: '#ded9e0',
+    line: '#2f2637',
+    ink: '#2f2637',
+  },
 };
 
 const BG = 0;
