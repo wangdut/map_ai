@@ -23,16 +23,30 @@ export function frameRatio(target, withMargin) {
   return target >= 1 ? (target * (1 - 2 * m)) / (1 - 2 * m * target) : (target - 2 * m) / (1 - 2 * m);
 }
 
+/** 框顶那行「海报取景框」标签占的高度 */
+export const TAG_ROOM = 26;
+
 /**
- * 取景框矩形：按容器宽高的 fill 比例画框，且绝不溢出容器。
+ * 取景框矩形：在「真正看得见」的地图区域里画最大的 r 比例矩形，水平居中，绝不溢出容器。
+ * top / bottom 是浮在地图上的界面（顶栏、状态栏）占掉的条——框压上去会被挡住，看不见框边也看不见那截构图；
+ * 剩下的可用带再按 fill 留一点呼吸空间，框在带内垂直居中。
  * 容器比取景框"更宽"时受限的是高度（宽 = 高 × 比例），反之受限的是宽度——取两者里较小的那个。
  */
-export function fitFrame(mapW, mapH, r, fill = 0.62) {
-  const maxW = Math.round(mapW * fill);
-  const maxH = Math.round(mapH * fill);
-  const width = Math.min(maxW, Math.round(maxH * r));
+export function fitFrame(mapW, mapH, r, opts = {}) {
+  const { top = TAG_ROOM, bottom = 0, fill = 0.94 } = opts;
+  const band = Math.max(1, mapH - top - bottom);
+  const gx = Math.round((mapW * (1 - fill)) / 2);
+  const gy = Math.round((band * (1 - fill)) / 2);
+  const availW = Math.max(1, mapW - gx * 2);
+  const availH = Math.max(1, band - gy * 2);
+  const width = Math.min(availW, Math.round(availH * r));
   const height = Math.round(width / r);
-  return { left: Math.round((mapW - width) / 2), top: Math.round((mapH - height) / 2), width, height };
+  return {
+    left: Math.round((mapW - width) / 2),
+    top: top + gy + Math.round((band - gy * 2 - height) / 2),
+    width,
+    height,
+  };
 }
 
 /** 取景框（容器像素矩形）在当前视图下覆盖的地理范围 */

@@ -609,8 +609,10 @@ body.poster-open .layer-switch { display: none; }
 .poster-frame.busy { border-color: #7fd0ff; }
 .poster-frame .pf-tag {
   position: absolute;
-  left: -1.5px;
+  /* 框顶居中：左上角会被左侧的海报面板压住，两侧面板都够不到中间 */
+  left: 50%;
   top: -25px;
+  transform: translateX(-50%);
   font-size: 11.5px;
   letter-spacing: 0.08em;
   color: #fff;

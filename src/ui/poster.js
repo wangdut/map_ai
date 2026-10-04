@@ -7,6 +7,7 @@ import {
   frameSpan,
   frameRatio,
   fitFrame,
+  TAG_ROOM,
   MARGIN_RATIO,
   FONTS,
   TITLE_SIZE_RATIO,
@@ -121,9 +122,20 @@ export function createPosterTool(map, ui) {
 
   const marginOn = () => (card ? card.querySelector('[data-margin]').checked : true);
 
+  /** 顶栏和状态栏浮在地图上，框压上去就看不见那两条边了——量出它们占掉的高度 */
+  function chrome() {
+    const box = map.getContainer().getBoundingClientRect();
+    const bar = document.querySelector('.topbar')?.getBoundingClientRect();
+    const status = document.querySelector('.statusbar')?.getBoundingClientRect();
+    return {
+      top: (bar ? Math.max(0, Math.round(bar.bottom - box.top)) : 0) + TAG_ROOM,
+      bottom: status ? Math.max(0, Math.round(box.bottom - status.top)) : 0,
+    };
+  }
+
   function frameRect() {
     const size = map.getSize();
-    return fitFrame(size.x, size.y, frameRatio(ratio, marginOn()));
+    return fitFrame(size.x, size.y, frameRatio(ratio, marginOn()), chrome());
   }
 
   function placeOverlay() {
