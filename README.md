@@ -8,7 +8,7 @@
 
 ## 效果展示
 
-以下五张都是本工具直接导出的成图，未做任何后期。仓库里存的是等比缩到长边 1600 px 的预览（`image/preview/`），导出原图仍留在本地的 `image/` 下（已被 git 忽略），说明里标的是**原图尺寸**。
+以下五张都是本工具直接导出的成图，未做任何后期。仓库只收长边 1600 px 的预览（`image/preview/`），原图一张几 MB、不入库（`.gitignore` 已排除 `image/` 根目录），说明里标的是**原图尺寸**。
 
 **广州 · 琥珀** — 原图 4472×3356（4:3，留白边）。主干道走橙、次干浅琥珀、普通路压成暖灰，水系用青蓝把整幅按住。
 
@@ -147,7 +147,7 @@ src/highlight/           store.js（集合/配色/持久化/命中）、render.j
 src/ui/                  search.js panel.js contextmenu.js draw.js measure.js route.js settings.js features.js（功能菜单） poster.js（海报取景与导出） escape.js
 src/export/              artstyle.js（像素分类/去字/回填/闭运算/配色重映射）、tileprint.js（瓦片规划合成与海报排版）
 data/admin-index.json    行政区名称索引
-image/preview/           「效果展示」用的 1600px 预览（导出的原图留在本地 image/，不进仓库）
+image/preview/           「效果展示」用的 1600px 预览（几 MB 一张的原图不入库）
 serve.mjs  启动.bat  config.example.json
 scripts/                 build-admin-index.mjs probe-sources.mjs probe-amap.mjs
 tests/                   geom.test.mjs admin-tree.test.mjs route.test.mjs artstyle.test.mjs tileprint.test.mjs
