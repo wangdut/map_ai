@@ -403,17 +403,18 @@ export function createPosterTool(map, ui) {
     if (!hit) return ui.toast(`行政区划索引里没有「${q}」`);
     try {
       const { geometry, props } = await regionOf(hit.adcode);
-      const c = props.centroid;
-      city = { ...hit, geometry, centroid: c ? [c[1], c[0]] : null };
+      const c = props.center;
+      city = { ...hit, geometry, center: c ? [c[1], c[0]] : null };
     } catch (e) {
       city = { ...hit, geometry: null };
       ui.toast(`${hit.name}：轮廓取不到（${e.message}），只按名字取景`);
     }
     card.querySelector('[data-title]').value = shortName(hit.name) || hit.name;
     const path = (hit.path || '').split('/').map(shortName).filter(Boolean);
-    const c = city.centroid || bboxCenter(city.geometry);
+    // center 是政府驻地；centroid 是轮廓的面积中心，狭长辖区（哈尔滨、广州）能差上百公里，海报读起来就是错的地方
+    const c = city.center || bboxCenter(city.geometry);
     const coords = c
-      ? `${Math.abs(c[0]).toFixed(4)}°${c[0] >= 0 ? 'N' : 'S'} / ${Math.abs(c[1]).toFixed(4)}°${c[1] >= 0 ? 'E' : 'W'} · `
+      ? `${Math.abs(c[0]).toFixed(2)}°${c[0] >= 0 ? 'N' : 'S'} / ${Math.abs(c[1]).toFixed(2)}°${c[1] >= 0 ? 'E' : 'W'} · `
       : '';
     card.querySelector('[data-sub]').value = `${coords}${[...path, '中国'].join(' · ')}`;
     fitCity();
