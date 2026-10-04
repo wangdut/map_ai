@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { frameRatio, fitFrame, TAG_ROOM, planCapture, innerLongEdge, posterDims, MARGIN_RATIO } from '../src/export/tileprint.js';
+import { frameRatio, fitFrame, TAG_ROOM, planCapture, innerLongEdge, posterDims, markerPoint, MARGIN_RATIO } from '../src/export/tileprint.js';
 
 /** 与 layout() 同一套留白公式：内框 + 两侧留白 = 成图 */
 function outerRatio(innerW, innerH) {
@@ -133,4 +133,19 @@ test('取景范围大到超出抓取上限时，按原生像素出图而不是�
   assert.equal(dims.scale, 1, '原生像素不够时不许放大');
   assert.ok(Math.max(dims.width, dims.height) < 6000, `不该冒充 6000，实得 ${dims.width}x${dims.height}`);
   assert.ok(plan.width * plan.height <= 45_000_000 && plan.count <= 600, '原生抓取必须落在上限内');
+});
+
+test('标记点换算：取景框中心的地理点落在画面正中，框外的点会被拦下', () => {
+  const map = stubMap([23.13, 113.26], 12);
+  const frame = { left: 100, top: 60, width: 763, height: 572 };
+  const plan = planCapture(map, frame, innerLongEdge(3000, true));
+  const c = map.containerPointToLatLng([frame.left + frame.width / 2, frame.top + frame.height / 2]);
+  const mid = markerPoint(map, c, plan, 1);
+  assert.ok(mid.inside, '框中心的点应该算在画面内');
+  assert.ok(Math.abs(mid.x - plan.width / 2) <= 2, `中心 x=${mid.x}，应约 ${plan.width / 2}`);
+  assert.ok(Math.abs(mid.y - plan.height / 2) <= 2, `中心 y=${mid.y}，应约 ${plan.height / 2}`);
+  assert.ok(!markerPoint(map, [c.lat + 1, c.lng], plan, 1).inside, '框以北 1 度的点必须在画面外');
+  assert.ok(!markerPoint(map, [c.lat, c.lng + 1], plan, 1).inside, '框以东 1 度的点必须在画面外');
+  const half = markerPoint(map, c, plan, 0.5);
+  assert.ok(Math.abs(half.x - plan.width * 0.25) <= 1, '降采样比例要一起乘进去');
 });

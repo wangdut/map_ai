@@ -10,10 +10,14 @@ import {
   TAG_ROOM,
   innerLongEdge,
   posterDims,
+  MARKERS,
+  MARKER_SIZE_RATIO,
+  markerPoint,
   FONTS,
   TITLE_SIZE_RATIO,
   SUB_SIZE_RATIO,
 } from '../export/tileprint.js';
+import { wgs2gcj } from '../geom/coortransform.js';
 import { STYLES } from '../export/artstyle.js';
 import { esc } from './escape.js';
 
@@ -72,6 +76,13 @@ const styleChips = (selected) =>
     )
     .join('');
 
+const markerChips = (selected) =>
+  Object.entries(MARKERS)
+    .map(
+      ([k, m]) => `<button class="pc-chip${k === selected ? ' active' : ''}" data-v="${k}">${esc(m.label)}</button>`,
+    )
+    .join('');
+
 const fontOptions = (selected) =>
   Object.entries(FONTS)
     .map(([k, f]) => `<option value="${k}"${k === selected ? ' selected' : ''}>${esc(f.label)}</option>`)
@@ -102,6 +113,10 @@ export function createPosterTool(map, ui) {
   let subFont = 'sans';
   let titleColor = null;
   let subColor = null;
+  let markerShape = 'star';
+  let markerColor = null;
+  let myPos = null;
+  let posPin = null;
   let busy = false;
   let previewUrl = '';
 
@@ -119,6 +134,10 @@ export function createPosterTool(map, ui) {
       subColor,
       titleRatio: num('[data-tsize]', TITLE_SIZE_RATIO),
       subRatio: num('[data-ssize]', SUB_SIZE_RATIO),
+      marker: card.querySelector('[data-marker]').checked,
+      markerShape,
+      markerColor,
+      markerRatio: num('[data-msize]', MARKER_SIZE_RATIO),
     };
   };
 
@@ -161,19 +180,93 @@ export function createPosterTool(map, ui) {
         `成图 ${dims.width}×${dims.height} px（${label}）· z${plan.z} · ${plan.count} 块瓦片 · ` +
         `覆盖约 ${span.kmX.toFixed(1)} × ${span.kmY.toFixed(1)} km` +
         (dims.capped ? ' · 已到抓取上限，够不到该档位' : '');
+      if (card.querySelector('[data-marker]').checked && myPos) {
+        note.textContent += markerPoint(map, myPos, plan, 1).inside ? ' · 标记在画面内' : ' · 标记在取景框外，拖动图上的点或平移地图可挪进来';
+      }
     } catch (e) {
       note.textContent = `取景参数算不出来：${e.message}`;
     }
+    // 参数行算不算得成都跟预览点无关，放在 catch 之后一起走
+    syncPin();
   }
 
   /** 取色器永远显示"当前实际会用的颜色"；没显式指定时「自动」按钮没什么可做的，置灰 */
   function syncTypeControls() {
     if (!card) return;
-    const ink = (STYLES[style] || STYLES.amber).ink;
-    card.querySelector('[data-tcolor]').value = titleColor || ink;
-    card.querySelector('[data-scolor]').value = subColor || ink;
+    const s = STYLES[style] || STYLES.amber;
+    card.querySelector('[data-tcolor]').value = titleColor || s.ink;
+    card.querySelector('[data-scolor]').value = subColor || s.ink;
+    card.querySelector('[data-mcolor]').value = markerColor || s.marker;
     card.querySelector('[data-tauto]').disabled = !titleColor;
     card.querySelector('[data-sauto]').disabled = !subColor;
+    card.querySelector('[data-mauto]').disabled = !markerColor;
+    syncPin();
+  }
+
+  /**
+   * 定位一次就够，结果存成 GCJ02：浏览器给的是 WGS84，高德瓦片是 GCJ02，不转会偏出去几百米。
+   * 桌面设备常常没有定位精度甚至直接拒绝授权，这时用地图中心顶上并说清楚；手动拖过的点一律不再覆盖。
+   */
+  function locate() {
+    if (myPos && myPos.source !== 'center') return;
+    if (!('geolocation' in navigator)) return useCenter('这个浏览器不提供定位接口');
+    ui.toast('正在定位…');
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        const [lat, lng] = wgs2gcj(p.coords.latitude, p.coords.longitude);
+        myPos = { lat, lng, source: 'gps' };
+        ui.toast(`已定位，误差约 ${Math.round(p.coords.accuracy)} 米`);
+        updateNote();
+      },
+      (e) => useCenter(`定位没成功（${e.message}）`),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 120000 },
+    );
+  }
+
+  function useCenter(why) {
+    const c = map.getCenter();
+    myPos = { lat: c.lat, lng: c.lng, source: 'center' };
+    ui.toast(`${why}，暂用地图中心作标记，可拖动图上的点调整`);
+    updateNote();
+  }
+
+  /**
+   * 地图上的落点预览：海报只画符号不写地名，用户得能在图上看见这一点落在哪，
+   * 拖一拖就能改指别处。它是 DOM 覆盖层，成图是逐块抓瓦片合成的，永远不会被拍进海报里。
+   */
+  function syncPin() {
+    if (!card) return;
+    const on = card.querySelector('[data-marker]').checked && myPos;
+    if (!on) {
+      if (posPin) map.removeLayer(posPin);
+      posPin = null;
+      return;
+    }
+    if (!posPin) {
+      if (!map.getPane('poster-markers')) {
+        map.createPane('poster-markers');
+        map.getPane('poster-markers').style.zIndex = 500;
+      }
+      // 用 marker 而不是 circleMarker：canvas 渲染的矢量路径不支持 draggable，拖不动
+      posPin = L.marker(myPos, {
+        pane: 'poster-markers',
+        draggable: true,
+        title: '海报标记位置，可拖动',
+        icon: L.divIcon({ className: 'poster-pin', iconSize: [16, 16], iconAnchor: [8, 8] }),
+      }).addTo(map);
+      posPin.on('dragend', () => {
+        const ll = posPin.getLatLng();
+        myPos = { lat: ll.lat, lng: ll.lng, source: 'drag' };
+        updateNote();
+      });
+    }
+    const s = STYLES[style] || STYLES.amber;
+    const el = posPin.getElement();
+    if (el) {
+      el.style.background = markerColor || s.marker;
+      el.style.borderColor = s.paper;
+    }
+    posPin.setLatLng(myPos);
   }
 
   function build() {
@@ -193,6 +286,16 @@ export function createPosterTool(map, ui) {
         <label class="pc-row inline"><input type="checkbox" data-boundary checked /><span>叠行政界线</span></label>
         <label class="pc-row inline"><input type="checkbox" data-clip /><span>按城市轮廓裁切</span></label>
         <label class="pc-row inline"><input type="checkbox" data-margin checked /><span>留白边与细框</span></label>
+        <label class="pc-row inline"><input type="checkbox" data-marker /><span>标记我的位置</span></label>
+        <div class="pc-row marker-only hidden">
+          <span class="k">符号</span>
+          <div class="pc-chips" data-symbols>${markerChips(markerShape)}</div>
+        </div>
+        <div class="pc-row type marker-only hidden">
+          <span class="k">大小</span>
+          <input type="number" data-msize min="0.3" max="8" step="0.1" value="${toPct(MARKER_SIZE_RATIO)}" title="符号直径＝成图长边的百分比" /><span class="u">%</span>
+          <input type="color" data-mcolor title="标记颜色" /><button class="ghost" data-mauto title="用配色方案的标记色">自动</button>
+        </div>
         <div class="pc-row"><span class="k">标题</span><input data-title placeholder="海报上的大字，留空则不显示" /></div>
         <div class="pc-row type">
           <span class="k"></span>
@@ -226,6 +329,7 @@ export function createPosterTool(map, ui) {
         group.querySelectorAll('.pc-chip').forEach((b) => b.classList.toggle('active', b === btn));
         if (group.hasAttribute('data-ratios')) ratio = Number(btn.dataset.v);
         if (group.hasAttribute('data-quality')) target = Number(btn.dataset.v);
+        if (group.hasAttribute('data-symbols')) markerShape = btn.dataset.v;
         if (group.hasAttribute('data-styles')) {
           style = btn.dataset.v;
           syncTypeControls();
@@ -233,6 +337,10 @@ export function createPosterTool(map, ui) {
         placeOverlay();
         updateNote();
         return;
+      }
+      if (btn.hasAttribute('data-mauto')) {
+        markerColor = null;
+        return syncTypeControls();
       }
       if (btn.hasAttribute('data-tauto')) {
         titleColor = null;
@@ -261,6 +369,19 @@ export function createPosterTool(map, ui) {
         subColor = el.value;
         card.querySelector('[data-sauto]').disabled = false;
       }
+      if (el.matches('[data-mcolor]')) {
+        markerColor = el.value;
+        card.querySelector('[data-mauto]').disabled = false;
+        syncPin();
+      }
+    });
+    card.querySelector('[data-marker]').addEventListener('change', (e) => {
+      const on = e.target.checked;
+      card.querySelectorAll('.marker-only').forEach((row) => row.classList.toggle('hidden', !on));
+      // 定位与手动拖过的点留着，重新勾选不用再跑一次定位；地图中心兜的底是即时值，取消就丢
+      if (!on && myPos?.source !== 'gps' && myPos?.source !== 'drag') myPos = null;
+      if (on) locate();
+      updateNote();
     });
     syncTypeControls();
     card.querySelector('[data-city]').addEventListener('keydown', (e) => {
@@ -347,6 +468,10 @@ export function createPosterTool(map, ui) {
   async function run(mode) {
     if (busy) return;
     const s = state();
+    if (s.marker && !myPos) {
+      locate();
+      return ui.toast('位置还没回来，稍等一下再点一次');
+    }
     const px = mode === 'preview' ? 900 : target;
     const frame = frameRect();
     const plan = planCapture(map, frame, innerLongEdge(px, marginOn()));
@@ -354,10 +479,11 @@ export function createPosterTool(map, ui) {
     let lastPaint = 0;
     try {
       const boundaries = await collectGeometries(s);
-      const { canvas, dims, failed } = await renderPoster(map, {
+      const { canvas, dims, failed, markerOut } = await renderPoster(map, {
         frame,
         target: px,
         style,
+        marker: s.marker ? { latlng: myPos, shape: s.markerShape, sizeRatio: s.markerRatio, color: s.markerColor } : null,
         boundaries,
         clip: s.clip && city?.geometry ? [city.geometry] : null,
         margin: s.margin,
@@ -380,6 +506,7 @@ export function createPosterTool(map, ui) {
         },
       });
       if (failed) ui.toast(`有 ${failed} 块瓦片没取到，海报上会是底色`);
+      if (markerOut) ui.toast('你的位置在取景框外，这张图上没有画标记');
       if (mode === 'preview') {
         const box = card.querySelector('.pc-preview');
         const img = box.querySelector('img');
@@ -443,6 +570,8 @@ export function createPosterTool(map, ui) {
     window.removeEventListener('resize', onResize);
     overlay?.remove();
     overlay = null;
+    if (posPin) map.removeLayer(posPin);
+    posPin = null;
     card?.remove();
     card = null;
     busy = false;

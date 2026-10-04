@@ -404,6 +404,15 @@ body {
 }
 .rc-pin.from { background: #16a34a; }
 .rc-pin.to { background: #dc2626; }
+
+/* 海报「标记我的位置」的落点预览：填充与描边跟着配色方案，由 JS 写内联样式 */
+.poster-pin {
+  box-sizing: border-box;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  cursor: grab;
+}
 .rc-pin-label {
   border: 0;
   background: rgba(255, 255, 255, 0.92);

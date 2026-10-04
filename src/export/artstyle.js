@@ -19,6 +19,7 @@ export const STYLES = {
     minor: '#ded6c4',
     line: '#2f3a45',
     ink: '#2f3a45',
+    marker: '#c0392b',
   },
   ink: {
     label: '纸墨',
@@ -30,6 +31,8 @@ export const STYLES = {
     minor: '#d8d5ce',
     line: '#3c434c',
     ink: '#3c434c',
+    /* 单色印刷里唯一的彩色通常是朱笔批注 */
+    marker: '#b03a2e',
   },
   night: {
     label: '暗夜',
@@ -41,6 +44,7 @@ export const STYLES = {
     minor: '#2b333d',
     line: '#e6e1d3',
     ink: '#e6e1d3',
+    marker: '#ff6b57',
   },
   /* 蓝染／蓝印花布：整幅只用一种颜料的不同浓度。水系偏青、主干道偏紫，靠色相而不是明度分开 */
   indigo: {
@@ -53,6 +57,7 @@ export const STYLES = {
     minor: '#d5dbe2',
     line: '#26313f',
     ink: '#26313f',
+    marker: '#b8402c',
   },
   /* 龙泉青瓷：梅子青釉做底，路网是刻花后的深色积釉，水系另取一味湖绿 */
   celadon: {
@@ -65,6 +70,7 @@ export const STYLES = {
     minor: '#dfe2d5',
     line: '#2b3a34',
     ink: '#2b3a34',
+    marker: '#b0472c',
   },
   /* 赭石陶土：黄土纸配砖红主干道，水系故意用冷青，免得整幅糊成一片暖色 */
   ochre: {
@@ -77,6 +83,7 @@ export const STYLES = {
     minor: '#e3d5bd',
     line: '#40291d',
     ink: '#40291d',
+    marker: '#26414f',
   },
   /* 暮紫藕荷：淡紫底配梅紫主干道，水系取普鲁士蓝紫，与暖紫的路网拉开 */
   dusk: {
@@ -89,6 +96,7 @@ export const STYLES = {
     minor: '#ded9e0',
     line: '#2f2637',
     ink: '#2f2637',
+    marker: '#c98a2e',
   },
 };
 

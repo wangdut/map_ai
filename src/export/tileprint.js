@@ -85,6 +85,17 @@ export function posterDims(plan, innerPx, withMargin) {
 }
 
 /**
+ * 地理点 → 成图上的像素（已按降采样比例缩过）。
+ * inside 为 false 表示这点落在取景框外，画出来会跑到留白里，界面上要提前拦掉。
+ */
+export function markerPoint(map, latlng, plan, scale) {
+  const p = map.project(latlng, plan.z);
+  const x = (p.x - plan.minX) * scale;
+  const y = (p.y - plan.minY) * scale;
+  return { x, y, inside: x >= 0 && y >= 0 && x <= plan.width * scale && y <= plan.height * scale };
+}
+
+/**
  * 反推抓取参数：内框长边像素 → 需要的整数缩放级 → 瓦片网格。
  * 瓦片数或画布面积超限时降一级重算；原生像素只会多不会少，缺的部分由 posterDims 判定，不靠插值补。
  */
@@ -254,6 +265,82 @@ function drawTracked(ctx, text, cx, y, spacing, stroke = false) {
   return total;
 }
 
+/** 位置标记符号：都以「那个点」为几何中心，针形例外——它的尖对准点，符合地图针的读法 */
+export const MARKERS = {
+  star: { label: '五角星' },
+  dot: { label: '圆点' },
+  ring: { label: '靶心' },
+  diamond: { label: '菱形' },
+  pin: { label: '定位针' },
+};
+
+/** 符号直径默认占成图长边的比例：6000 px 的巨幅上也只有 132 px，不喧宾夺主 */
+export const MARKER_SIZE_RATIO = 0.022;
+
+function markerPath(ctx, shape, x, y, r) {
+  ctx.beginPath();
+  if (shape === 'star') {
+    for (let i = 0; i < 10; i++) {
+      const rad = i % 2 ? r * 0.44 : r;
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const px = x + Math.cos(a) * rad;
+      const py = y + Math.sin(a) * rad;
+      if (i) ctx.lineTo(px, py);
+      else ctx.moveTo(px, py);
+    }
+    ctx.closePath();
+  } else if (shape === 'diamond') {
+    ctx.moveTo(x, y - r);
+    ctx.lineTo(x + r * 0.72, y);
+    ctx.lineTo(x, y + r);
+    ctx.lineTo(x - r * 0.72, y);
+    ctx.closePath();
+  } else if (shape === 'pin') {
+    /* 针尖落在点上，圆头朝上——地图针的读法就是尖指着位置，不是中心指着位置 */
+    const cr = r * 0.66;
+    const cy = y - r * 1.32;
+    const a = Math.asin(Math.min(1, cr / (y - cy)));
+    ctx.moveTo(x, y);
+    ctx.arc(x, cy, cr, Math.PI - a, a);
+    ctx.closePath();
+    return { hx: x, hy: cy, hr: cr };
+  } else {
+    ctx.arc(x, y, r * (shape === 'dot' ? 0.8 : 0.92), 0, Math.PI * 2);
+  }
+  return null;
+}
+
+/** 沿轮廓垫一圈纸色再落色：底图再密也读得出这个点，且不用整块底板 */
+function drawMarker(ctx, shape, x, y, r, color, paper) {
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = paper;
+  ctx.lineWidth = Math.max(1.5, r * 0.55);
+  const head = markerPath(ctx, shape, x, y, r);
+  ctx.stroke();
+  if (shape === 'ring') {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1, r * 0.34);
+    markerPath(ctx, shape, x, y, r);
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.34, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.fillStyle = color;
+    markerPath(ctx, shape, x, y, r);
+    ctx.fill();
+    if (head) {
+      ctx.fillStyle = paper;
+      ctx.beginPath();
+      ctx.arc(head.hx, head.hy, head.hr * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
 /** 版式：留白边 + 细内框 + 底部居中的大字标题组 */
 function layout(canvas, style, opts) {
   const s = STYLES[style] || STYLES.amber;
@@ -274,6 +361,20 @@ function layout(canvas, style, opts) {
     const inset = margin + Math.round(longEdge * 0.012);
     ctx.strokeRect(inset, inset, out.width - inset * 2, out.height - inset * 2);
     ctx.globalAlpha = 1;
+  }
+
+  if (opts.marker) {
+    const m = opts.marker;
+    drawMarker(
+      ctx,
+      m.shape,
+      m.x + margin,
+      m.y + margin,
+      // sizeRatio 说的是直径，markerPath 里的 r 是外沿半径
+      Math.max(3, (longEdge * (m.sizeRatio || MARKER_SIZE_RATIO)) / 2),
+      m.color || s.marker,
+      s.paper,
+    );
   }
 
   const title = String(opts.title ?? '').trim();
@@ -355,8 +456,9 @@ function resample(canvas, scale) {
 
 /**
  * 生成海报画布。opts：{ frame, target, style, title, subtitle, margin, frameLine,
- * boundaries, clip, onProgress,
+ * boundaries, clip, marker, onProgress,
  * titleFont, titleRatio, titleColor, subFont, subRatio, subColor }
+ * marker 是 { latlng, shape, sizeRatio, color }，落在取景框外时不画，返回值里 markerOut 为 true。
  * target 是成图（含留白）长边像素；字号用「占成图长边的比例」，字色留 null 表示跟随配色的墨色。
  */
 export async function renderPoster(map, opts) {
@@ -395,5 +497,12 @@ export async function renderPoster(map, opts) {
     mapCanvas.width = 0;
     mapCanvas.height = 0;
   }
-  return { canvas: layout(scaled, opts.style, opts), plan, dims, failed };
+  let marker = null;
+  let markerOut = false;
+  if (opts.marker?.latlng) {
+    const p = markerPoint(map, opts.marker.latlng, plan, dims.scale);
+    markerOut = !p.inside;
+    marker = p.inside ? { ...opts.marker, x: p.x, y: p.y } : null;
+  }
+  return { canvas: layout(scaled, opts.style, { ...opts, marker }), plan, dims, failed, marker, markerOut };
 }
