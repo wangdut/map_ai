@@ -643,6 +643,13 @@ body.poster-open .layer-switch { display: none; }
 .pc-row.inline input { width: 15px; height: 15px; }
 .pc-row.inline span { color: var(--ink); }
 
+.pc-row.type { gap: 5px; }
+.pc-row.type select { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 7px; padding: 5px 6px; background: #fff; font-size: 12px; outline: none; }
+.pc-row.type input[type='number'] { flex: none; width: 54px; padding: 5px 6px; }
+.pc-row.type input[type='color'] { flex: none; width: 34px; height: 28px; padding: 2px; }
+.pc-row.type .u { flex: none; color: var(--ink-2); }
+.pc-row.type button { flex: none; padding: 5px 8px; }
+
 .pc-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .pc-chip {
   border: 1px solid var(--line);

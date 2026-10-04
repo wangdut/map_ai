@@ -1,9 +1,39 @@
 import { loadAdminIndex, searchAdmin, shortName, LEVEL_LABEL } from '../data/admin-index.js';
 import { regionOf, childrenOf } from '../data/datav.js';
 import { bboxOfGeoJSON } from '../geom/geo.js';
-import { renderPoster, planCapture, frameSpan, frameRatio, MARGIN_RATIO } from '../export/tileprint.js';
+import {
+  renderPoster,
+  planCapture,
+  frameSpan,
+  frameRatio,
+  fitFrame,
+  MARGIN_RATIO,
+  FONTS,
+  TITLE_SIZE_RATIO,
+  SUB_SIZE_RATIO,
+} from '../export/tileprint.js';
 import { STYLES } from '../export/artstyle.js';
 import { esc } from './escape.js';
+
+const SEQ_KEY = 'map_ai.poster_seq';
+
+/** 同一城市反复导出会撞名、被浏览器悄悄追加 (1) 覆盖。按基础名自增编号，编号记在 localStorage 里跨刷新继续 */
+function numberedName(base) {
+  let seq = {};
+  try {
+    seq = JSON.parse(localStorage.getItem(SEQ_KEY) || '{}') || {};
+  } catch {
+    seq = {};
+  }
+  const n = (Number(seq[base]) || 0) + 1;
+  try {
+    seq[base] = n;
+    localStorage.setItem(SEQ_KEY, JSON.stringify(seq));
+  } catch {
+    /* 存不下（隐私模式等）就每次都从 01 开始，浏览器自己会加 (1) 兜底 */
+  }
+  return `${base}_${String(n).padStart(2, '0')}.png`;
+}
 
 const RATIOS = [
   ['4:3', 4 / 3],
@@ -39,6 +69,20 @@ const styleChips = (selected) =>
     )
     .join('');
 
+const fontOptions = (selected) =>
+  Object.entries(FONTS)
+    .map(([k, f]) => `<option value="${k}"${k === selected ? ' selected' : ''}>${esc(f.label)}</option>`)
+    .join('');
+
+/** 数字输入框里的「占长边百分比」→ 排版要的比例，填了非法值就回落到默认 */
+const pctToRatio = (raw, fallback) => {
+  const v = Number(raw);
+  return Number.isFinite(v) && v > 0 && v <= 40 ? v / 100 : fallback;
+};
+
+/** 反方向：比例 → 输入框里显示的百分比，留一位小数 */
+const toPct = (ratio) => Math.round(ratio * 1000) / 10;
+
 /**
  * 「导出城市地图艺术海报」。
  * 成图不是屏幕截图：按取景框反推缩放级抓矢量瓦片，逐块分类去字重着色后合成，
@@ -51,27 +95,35 @@ export function createPosterTool(map, ui) {
   let ratio = 4 / 3;
   let target = 3000;
   let style = 'amber';
+  let titleFont = 'sans';
+  let subFont = 'sans';
+  let titleColor = null;
+  let subColor = null;
   let busy = false;
   let previewUrl = '';
 
-  const state = () => ({
-    clip: card.querySelector('[data-clip]').checked,
-    boundary: card.querySelector('[data-boundary]').checked,
-    margin: card.querySelector('[data-margin]').checked,
-    title: card.querySelector('[data-title]').value.trim(),
-    subtitle: card.querySelector('[data-sub]').value.trim(),
-  });
+  const state = () => {
+    const num = (sel, fallback) => pctToRatio(card.querySelector(sel).value, fallback);
+    return {
+      clip: card.querySelector('[data-clip]').checked,
+      boundary: card.querySelector('[data-boundary]').checked,
+      margin: card.querySelector('[data-margin]').checked,
+      title: card.querySelector('[data-title]').value.trim(),
+      subtitle: card.querySelector('[data-sub]').value.trim(),
+      titleFont,
+      subFont,
+      titleColor,
+      subColor,
+      titleRatio: num('[data-tsize]', TITLE_SIZE_RATIO),
+      subRatio: num('[data-ssize]', SUB_SIZE_RATIO),
+    };
+  };
 
   const marginOn = () => (card ? card.querySelector('[data-margin]').checked : true);
 
   function frameRect() {
     const size = map.getSize();
-    const r = frameRatio(ratio, marginOn());
-    const maxW = Math.round(size.x * 0.62);
-    const maxH = Math.round(size.y * 0.62);
-    const width = maxW / maxH >= r ? maxW : Math.round(maxH * r);
-    const height = Math.round(width / r);
-    return { left: Math.round((size.x - width) / 2), top: Math.round((size.y - height) / 2), width, height };
+    return fitFrame(size.x, size.y, frameRatio(ratio, marginOn()));
   }
 
   function placeOverlay() {
@@ -99,6 +151,16 @@ export function createPosterTool(map, ui) {
     }
   }
 
+  /** 取色器永远显示"当前实际会用的颜色"；没显式指定时「自动」按钮没什么可做的，置灰 */
+  function syncTypeControls() {
+    if (!card) return;
+    const ink = (STYLES[style] || STYLES.amber).ink;
+    card.querySelector('[data-tcolor]').value = titleColor || ink;
+    card.querySelector('[data-scolor]').value = subColor || ink;
+    card.querySelector('[data-tauto]').disabled = !titleColor;
+    card.querySelector('[data-sauto]').disabled = !subColor;
+  }
+
   function build() {
     card = document.createElement('section');
     card.className = 'poster-card';
@@ -116,8 +178,20 @@ export function createPosterTool(map, ui) {
         <label class="pc-row inline"><input type="checkbox" data-boundary checked /><span>叠行政界线</span></label>
         <label class="pc-row inline"><input type="checkbox" data-clip /><span>按城市轮廓裁切</span></label>
         <label class="pc-row inline"><input type="checkbox" data-margin checked /><span>留白边与细框</span></label>
-        <div class="pc-row"><span class="k">标题</span><input data-title placeholder="海报上的大字" /></div>
-        <div class="pc-row"><span class="k">副标题</span><input data-sub placeholder="小字，自动转大写" /></div>
+        <div class="pc-row"><span class="k">标题</span><input data-title placeholder="海报上的大字，留空则不显示" /></div>
+        <div class="pc-row type">
+          <span class="k"></span>
+          <select data-tfont title="标题字体">${fontOptions(titleFont)}</select>
+          <input type="number" data-tsize min="1" max="40" step="0.1" value="${toPct(TITLE_SIZE_RATIO)}" title="字号＝成图长边的百分比" /><span class="u">%</span>
+          <input type="color" data-tcolor title="标题字色" /><button class="ghost" data-tauto title="用配色方案的墨色">自动</button>
+        </div>
+        <div class="pc-row"><span class="k">副标题</span><input data-sub placeholder="小字，自动转大写，留空则不显示" /></div>
+        <div class="pc-row type">
+          <span class="k"></span>
+          <select data-sfont title="副标题字体">${fontOptions(subFont)}</select>
+          <input type="number" data-ssize min="1" max="40" step="0.1" value="${toPct(SUB_SIZE_RATIO)}" title="字号＝成图长边的百分比" /><span class="u">%</span>
+          <input type="color" data-scolor title="副标题字色" /><button class="ghost" data-sauto title="用配色方案的墨色">自动</button>
+        </div>
         <div class="pc-note" data-note></div>
         <div class="pc-actions">
           <button class="ghost" data-preview>预览小图</button>
@@ -137,15 +211,43 @@ export function createPosterTool(map, ui) {
         group.querySelectorAll('.pc-chip').forEach((b) => b.classList.toggle('active', b === btn));
         if (group.hasAttribute('data-ratios')) ratio = Number(btn.dataset.v);
         if (group.hasAttribute('data-quality')) target = Number(btn.dataset.v);
-        if (group.hasAttribute('data-styles')) style = btn.dataset.v;
+        if (group.hasAttribute('data-styles')) {
+          style = btn.dataset.v;
+          syncTypeControls();
+        }
         placeOverlay();
         updateNote();
         return;
+      }
+      if (btn.hasAttribute('data-tauto')) {
+        titleColor = null;
+        return syncTypeControls();
+      }
+      if (btn.hasAttribute('data-sauto')) {
+        subColor = null;
+        return syncTypeControls();
       }
       if (btn.hasAttribute('data-pick')) return pick();
       if (btn.hasAttribute('data-preview')) return run('preview');
       if (btn.hasAttribute('data-export')) return run('export');
     });
+    card.addEventListener('change', (e) => {
+      const el = e.target;
+      if (el.matches('[data-tfont]')) titleFont = el.value;
+      if (el.matches('[data-sfont]')) subFont = el.value;
+    });
+    card.addEventListener('input', (e) => {
+      const el = e.target;
+      if (el.matches('[data-tcolor]')) {
+        titleColor = el.value;
+        card.querySelector('[data-tauto]').disabled = false;
+      }
+      if (el.matches('[data-scolor]')) {
+        subColor = el.value;
+        card.querySelector('[data-sauto]').disabled = false;
+      }
+    });
+    syncTypeControls();
     card.querySelector('[data-city]').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') pick();
     });
@@ -156,7 +258,7 @@ export function createPosterTool(map, ui) {
     return card;
   }
 
-  /** 输入城市名 → 本地行政索引拿 adcode → DataV 拿轮廓 → 把轮廓铺进取景框 */
+  /** 输入城市名 → 本地行政索引拿 adcode → DataV 拿轮廓 → 把轮廓铺进取景框，标题与副标题一律按新城市重写 */
   async function pick() {
     const q = card.querySelector('[data-city]').value.trim();
     if (!q) return ui.toast('先填一个城市或区县名');
@@ -171,19 +273,16 @@ export function createPosterTool(map, ui) {
       city = { ...hit, geometry: null };
       ui.toast(`${hit.name}：轮廓取不到（${e.message}），只按名字取景`);
     }
-    const box = card.querySelector('[data-title]');
-    if (!box.value.trim()) box.value = shortName(hit.name) || hit.name;
-    const sub = card.querySelector('[data-sub]');
+    card.querySelector('[data-title]').value = shortName(hit.name) || hit.name;
     const path = (hit.path || '').split('/').map(shortName).filter(Boolean);
     const c = city.centroid || bboxCenter(city.geometry);
-    if (!sub.value.trim() && c) {
-      sub.value = `${Math.abs(c[0]).toFixed(4)}°${c[0] >= 0 ? 'N' : 'S'} / ${Math.abs(c[1]).toFixed(4)}°${
-        c[1] >= 0 ? 'E' : 'W'
-      } · ${[...path, '中国'].join(' · ')}`;
-    }
+    const coords = c
+      ? `${Math.abs(c[0]).toFixed(4)}°${c[0] >= 0 ? 'N' : 'S'} / ${Math.abs(c[1]).toFixed(4)}°${c[1] >= 0 ? 'E' : 'W'} · `
+      : '';
+    card.querySelector('[data-sub]').value = `${coords}${[...path, '中国'].join(' · ')}`;
     fitCity();
     updateNote();
-    ui.toast(`已取景 ${hit.name}（${LEVEL_LABEL[hit.level] || hit.level}）`);
+    ui.toast(`已取景 ${hit.name}（${LEVEL_LABEL[hit.level] || hit.level}），标题与副标题已刷新`);
   }
 
   function bboxCenter(geometry) {
@@ -250,6 +349,12 @@ export function createPosterTool(map, ui) {
         frameLine: s.margin,
         title: s.title,
         subtitle: s.subtitle,
+        titleFont: s.titleFont,
+        titleRatio: s.titleRatio,
+        titleColor: s.titleColor,
+        subFont: s.subFont,
+        subRatio: s.subRatio,
+        subColor: s.subColor,
         onProgress: (done, total) => {
           const now = performance.now();
           if (now - lastPaint < 90 && done < total) return;
@@ -274,12 +379,13 @@ export function createPosterTool(map, ui) {
       const blob = await new Promise((res) => canvas.toBlob((b) => res(b), 'image/png'));
       if (!blob) return ui.toast('导出失败：画布太大，试试低一档清晰度');
       const url = URL.createObjectURL(blob);
+      const file = numberedName(`海报_${s.title || (city ? shortName(city.name) : '') || '城市'}_${canvas.width}x${canvas.height}`);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `海报_${s.title || city?.name || '城市'}_${canvas.width}x${canvas.height}.png`;
+      a.download = file;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 8000);
-      ui.toast(`已导出 ${canvas.width}×${canvas.height} PNG（z${plan.z}，${plan.count} 块瓦片）`);
+      ui.toast(`已导出 ${file}（${canvas.width}×${canvas.height}，z${plan.z}，${plan.count} 块瓦片）`);
     } catch (e) {
       setBusy(false);
       ui.toast(`导出失败：${e.message || e}`);

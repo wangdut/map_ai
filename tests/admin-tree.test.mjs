@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { granularityOptions, descendantsOf, GRAN_DEPTH, LADDER } from '../src/data/admin-tree.js';
+import { shortName } from '../src/data/admin-index.js';
 
 const values = (level) => granularityOptions(level).map((o) => `${o.value}${o.disabled ? '×' : ''}`);
 
@@ -65,4 +66,20 @@ test('DataV 递归取子区：省→市、市→区县、省→下两级区县�
   assert.equal(twoLevels.length, 122, `广东省下两级区县合计 122，实际 ${twoLevels.length}`);
   assert.ok(shaped(twoLevels));
   assert.equal(twoLevels[0].targetLevel, 'district');
+});
+
+/** 海报标题与副标题路径都用短名，削过头会把「曹县」写成「曹」 */
+test('行政后缀不能削到只剩一个字', () => {
+  assert.equal(shortName('曹县'), '曹县');
+  assert.equal(shortName('丰县'), '丰县');
+  assert.equal(shortName('沛县'), '沛县');
+});
+
+test('常规行政后缀照旧削掉', () => {
+  assert.equal(shortName('天河区'), '天河');
+  assert.equal(shortName('广州市'), '广州');
+  assert.equal(shortName('广东省'), '广东');
+  assert.equal(shortName('广西壮族自治区'), '广西');
+  assert.equal(shortName('内蒙古自治区'), '内蒙古');
+  assert.equal(shortName('神农架林区'), '神农架');
 });

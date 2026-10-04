@@ -23,6 +23,18 @@ export function frameRatio(target, withMargin) {
   return target >= 1 ? (target * (1 - 2 * m)) / (1 - 2 * m * target) : (target - 2 * m) / (1 - 2 * m);
 }
 
+/**
+ * 取景框矩形：按容器宽高的 fill 比例画框，且绝不溢出容器。
+ * 容器比取景框"更宽"时受限的是高度（宽 = 高 × 比例），反之受限的是宽度——取两者里较小的那个。
+ */
+export function fitFrame(mapW, mapH, r, fill = 0.62) {
+  const maxW = Math.round(mapW * fill);
+  const maxH = Math.round(mapH * fill);
+  const width = Math.min(maxW, Math.round(maxH * r));
+  const height = Math.round(width / r);
+  return { left: Math.round((mapW - width) / 2), top: Math.round((mapH - height) / 2), width, height };
+}
+
 /** 取景框（容器像素矩形）在当前视图下覆盖的地理范围 */
 export function frameCorners(map, frame) {
   const nw = map.containerPointToLatLng([frame.left, frame.top]);
@@ -181,7 +193,19 @@ function clipTo(map, canvas, geometries, plan) {
   return out;
 }
 
-const FONT = '"Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif';
+/** 可选字体：只列各平台都有的家族，靠 fallback 兜底，不引外部字体 */
+export const FONTS = {
+  sans: { label: '无衬线', stack: '"Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif' },
+  song: { label: '宋体', stack: '"Songti SC", SimSun, "Noto Serif CJK SC", Georgia, serif' },
+  kai: { label: '楷体', stack: '"Kaiti SC", KaiTi, STKaiti, "Microsoft YaHei", serif' },
+  hei: { label: '黑体', stack: 'SimHei, "Heiti SC", "Microsoft YaHei", Arial, sans-serif' },
+};
+
+/** 默认字号：占成图长边的比例 */
+export const TITLE_SIZE_RATIO = 0.062;
+export const SUB_SIZE_RATIO = 0.0155;
+
+const fontStack = (key) => (FONTS[key] || FONTS.sans).stack;
 
 /** 逐字排版，用自算字距——canvas 的 letterSpacing 不是到处都有 */
 function trackedWidth(ctx, text, spacing) {
@@ -225,52 +249,75 @@ function layout(canvas, style, opts) {
     ctx.globalAlpha = 1;
   }
 
-  if (opts.title) {
+  const title = String(opts.title ?? '').trim();
+  const sub = String(opts.subtitle ?? '').trim().toUpperCase();
+  if (title || sub) {
     const cx = out.width / 2;
-    const size = Math.round(longEdge * 0.062);
-    const baseY = out.height - margin - Math.round(longEdge * 0.085);
-    const sub = String(opts.subtitle || '').toUpperCase();
-    const subSize = Math.round(longEdge * 0.0155);
-    const subY = baseY + Math.round(size * 0.74);
+    const tSize = Math.round(longEdge * (opts.titleRatio || TITLE_SIZE_RATIO));
+    const sSize = Math.round(longEdge * (opts.subRatio || SUB_SIZE_RATIO));
+    const bottom = out.height - margin;
+    const tBase = bottom - Math.round(longEdge * 0.085);
+    const sBase = title ? tBase + Math.round(tSize * 0.74) : bottom - Math.round(longEdge * 0.05);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.font = `700 ${size}px ${FONT}`;
-    const tw = trackedWidth(ctx, opts.title, size * 0.2);
-    ctx.font = `500 ${subSize}px ${FONT}`;
-    const sw = sub ? trackedWidth(ctx, sub, subSize * 0.42) : 0;
-    const blockW = Math.max(tw, sw);
     ctx.lineJoin = 'round';
     ctx.miterLimit = 2;
-    /* 字面先描一圈纸色高亮再落墨：底图再花也读得出字，且不像整块底板那样在留白处留下印子 */
-    const tracked = (text, y, spacing, px, weight, haloRatio, alpha = 1) => {
-      ctx.font = `${weight} ${px}px ${FONT}`;
+    const line = ({ text, y, px, weight, family, color, track, haloRatio, alpha = 1 }) => {
+      const spacing = px * track;
+      ctx.font = `${weight} ${px}px ${family}`;
+      const width = trackedWidth(ctx, text, spacing);
+      /* 字面先描一圈纸色高亮再落墨：底图再花也读得出字，且不像整块底板那样在留白处留下印子 */
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = s.paper;
       ctx.lineWidth = Math.round(px * haloRatio);
       drawTracked(ctx, text, cx, y, spacing, true);
-      ctx.fillStyle = s.ink;
+      ctx.fillStyle = color;
       drawTracked(ctx, text, cx, y, spacing);
       ctx.globalAlpha = 1;
+      return width;
     };
 
-    ctx.strokeStyle = s.ink;
-    ctx.lineWidth = Math.max(1, longEdge / 2600);
-    const half = Math.round(Math.min(longEdge * 0.045, blockW * 0.35));
-    const ruleY = baseY + Math.round(size * 0.3);
-    ctx.beginPath();
-    ctx.moveTo(cx - half, ruleY);
-    ctx.lineTo(cx + half, ruleY);
-    ctx.stroke();
-
-    tracked(opts.title, baseY, size * 0.2, size, 700, 0.13);
-    if (sub) tracked(sub, subY, subSize * 0.42, subSize, 500, 0.22, 0.9);
+    if (title) {
+      const tw = line({
+        text: title,
+        y: tBase,
+        px: tSize,
+        weight: 700,
+        family: fontStack(opts.titleFont),
+        color: opts.titleColor || s.ink,
+        track: 0.2,
+        haloRatio: 0.13,
+      });
+      const half = Math.round(Math.min(longEdge * 0.045, tw * 0.35));
+      ctx.strokeStyle = opts.titleColor || s.line;
+      ctx.lineWidth = Math.max(1, longEdge / 2600);
+      ctx.beginPath();
+      ctx.moveTo(cx - half, tBase + Math.round(tSize * 0.3));
+      ctx.lineTo(cx + half, tBase + Math.round(tSize * 0.3));
+      ctx.stroke();
+    }
+    if (sub) {
+      line({
+        text: sub,
+        y: sBase,
+        px: sSize,
+        weight: 500,
+        family: fontStack(opts.subFont),
+        color: opts.subColor || s.ink,
+        track: 0.42,
+        haloRatio: 0.22,
+        alpha: opts.subColor ? 1 : 0.9,
+      });
+    }
   }
   return out;
 }
 
 /**
  * 生成海报画布。opts：{ frame, target, style, title, subtitle, margin, frameLine,
- * boundaries, clip, onProgress }
+ * boundaries, clip, onProgress,
+ * titleFont, titleRatio, titleColor, subFont, subRatio, subColor }
+ * 字号用「占成图长边的比例」，字色留 null 表示跟随配色的墨色。
  */
 export async function renderPoster(map, opts) {
   const plan = planCapture(map, opts.frame, opts.target);
